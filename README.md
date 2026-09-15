@@ -30,6 +30,30 @@ Manual rendering still works too:
 npx remotion render IndieWeeklyMarkdown out/video.mp4 --props=props.json
 ```
 
+## Deploy to Zeabur (Docker)
+
+This repo includes a Remotion-ready `Dockerfile` for Linux rendering (recommended over macOS versions older than 15).
+
+1. Push the repo to GitHub.
+2. In Zeabur, create a service from the repo (Dockerfile will be auto-detected).
+3. Give the service enough resources for rendering (recommend **≥ 2 GB memory**, ideally 4 GB).
+4. Deploy. Zeabur injects `PORT`; the workbench listens on `0.0.0.0`.
+
+Local Docker check:
+
+```console
+docker build -t remotion-workbench .
+docker run --rm -p 8080:8080 remotion-workbench
+```
+
+Then open `http://localhost:8080`.
+
+Notes:
+
+- Chrome Headless Shell is baked into the image at build time (`npx remotion browser ensure`).
+- Rendered MP4s live under `/app/out` inside the container and are served at `/renders/...`. Without a persistent volume they are lost on redeploy.
+- Concurrent renders are CPU/memory heavy; start with one user / one render at a time.
+
 ## Markdown Shape
 
 ```markdown

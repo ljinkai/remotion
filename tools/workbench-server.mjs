@@ -10,6 +10,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const outDir = path.join(root, "out");
 const tmpDir = path.join(root, ".workbench");
 const port = Number(process.env.PORT || 5177);
+const host = process.env.HOST || "0.0.0.0";
 
 let clientBundle = null;
 
@@ -272,6 +273,6 @@ const server = createServer(async (req, res) => {
   }
 });
 
-server.listen(port, () => {
-  console.log(`Markdown video workbench: http://localhost:${port}`);
+server.listen(port, host, () => {
+  console.log(`Markdown video workbench: http://${host}:${port}`);
 });
