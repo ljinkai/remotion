@@ -1,54 +1,72 @@
-# Remotion video
+# Remotion Markdown Video
 
-<p align="center">
-  <a href="https://github.com/remotion-dev/logo">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://github.com/remotion-dev/logo/raw/main/animated-logo-banner-dark.apng">
-      <img alt="Animated Remotion Logo" src="https://github.com/remotion-dev/logo/raw/main/animated-logo-banner-light.gif">
-    </picture>
-  </a>
-</p>
-
-Welcome to your Remotion project!
+Interactive Remotion workbench for turning a weekly Markdown document into a video.
 
 ## Commands
 
-**Install Dependencies**
-
 ```console
-npm i
+npm install
+npm run workbench
 ```
 
-**Start Preview**
+Open the printed local URL, paste or import a Markdown file, preview it, then click `生成 MP4`.
+Rendered videos are written to `out/`.
+
+Recommended runtime: Node 20+.
+
+Remotion 4.0.523 currently needs macOS 15+ for local MP4 composition on macOS.
+The workbench preview can still run on older macOS versions, but final MP4 rendering should happen
+on macOS 15+ or Linux CI.
+
+Remotion Studio still works:
 
 ```console
 npm run dev
 ```
 
-**Render video**
+Manual rendering still works too:
 
 ```console
-npx remotion render
+npx remotion render IndieWeeklyMarkdown out/video.mp4 --props=props.json
 ```
 
-**Upgrade Remotion**
+## Markdown Shape
 
-```console
-npx remotion upgrade
+```markdown
+---
+issue: 156
+theme: 单渠道突破法
+badge: 400万美元年收
+ticker: Indie Dev Product Revenue
+audio: narration.wav
+---
+
+# 独立开发变现周刊（第156期）：单渠道突破法
+
+这期独立开发变现周刊，主线是单渠道突破法。
+
+## Honey Traffic
+
+作者：@PashaBorsai
+日期：2026/09/05
+指标：$5k MRR
+图片：case-images/02-honey-traffic.png
+标签：SEO Pipeline
+
+AI 时代内容更多，关键词研究反而更刚需。
+
+## 一句话总结
+
+增长不是做更多动作，而是把一个动作做透。
 ```
 
-## Docs
+Supported item fields:
 
-Get started with Remotion by reading the [fundamentals page](https://www.remotion.dev/docs/the-fundamentals).
+- `作者` / `author`
+- `日期` / `date`
+- `指标` / `metric`
+- `图片` / `image`
+- `标签` / `fallback`
+- `副标题` / `subtitle`
 
-## Help
-
-We provide help on our [Discord server](https://discord.gg/6VzzNDwUwV).
-
-## Issues
-
-Found an issue with Remotion? [File an issue here](https://github.com/remotion-dev/remotion/issues/new).
-
-## License
-
-Note that for some entities a company license is needed. [Read the terms here](https://github.com/remotion-dev/remotion/blob/main/LICENSE.md).
+Images can be files under `public/` such as `case-images/example.png`, or remote `https://` URLs.
