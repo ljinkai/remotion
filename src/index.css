@@ -1,1 +1,284 @@
 @import "tailwindcss";
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #07090d;
+  font-family:
+    "Inter", "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+}
+
+.scene {
+  overflow: hidden;
+  color: #ffffff;
+  background: #07090d;
+}
+
+.softBackdrop {
+  background:
+    radial-gradient(circle at 16% 18%, rgba(56, 214, 198, 0.18), transparent 34%),
+    radial-gradient(circle at 86% 74%, rgba(255, 123, 104, 0.2), transparent 30%),
+    linear-gradient(135deg, #07090d 0%, #111620 56%, #080a0f 100%);
+}
+
+.header {
+  position: absolute;
+  z-index: 20;
+  left: 64px;
+  right: 64px;
+  top: 44px;
+  display: grid;
+  grid-template-columns: 260px 72px 1fr;
+  gap: 24px;
+  align-items: center;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 22px;
+  font-weight: 850;
+}
+
+.header strong {
+  color: #ffffff;
+  font-size: 27px;
+}
+
+.progressTrack {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.progressFill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #38d6c6, #f6c95f, #ff7b68, #7aa7ff);
+}
+
+.coverScene,
+.caseScene,
+.closingScene {
+  position: absolute;
+  inset: 0;
+}
+
+.coverScene {
+  display: flex;
+  align-items: center;
+  padding: 0 118px;
+  background:
+    linear-gradient(90deg, rgba(0, 0, 0, 0.52), transparent 72%),
+    radial-gradient(circle at 72% 54%, rgba(56, 214, 198, 0.22), transparent 28%);
+}
+
+.coverTitle p,
+.closingScene p {
+  margin: 0 0 22px;
+  color: #38d6c6;
+  font-size: 34px;
+  font-weight: 950;
+}
+
+.coverTitle h1 {
+  margin: 0 0 28px;
+  font-size: 142px;
+  line-height: 0.95;
+  letter-spacing: 0;
+}
+
+.coverTitle span {
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 44px;
+  font-weight: 820;
+}
+
+.coverBadge {
+  position: absolute;
+  right: 118px;
+  bottom: 214px;
+  padding: 24px 32px;
+  border-left: 8px solid #ff7b68;
+  background: rgba(255, 255, 255, 0.11);
+  font-size: 44px;
+  font-weight: 950;
+}
+
+.imageStage {
+  position: absolute;
+  left: 72px;
+  right: 72px;
+  top: 96px;
+  height: 760px;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #10141d;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.42);
+}
+
+.caseImageBg {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform-origin: center;
+  filter: blur(28px) brightness(0.62) saturate(1.12);
+  opacity: 0.72;
+}
+
+.caseImage {
+  position: absolute;
+  inset: 28px 0 96px;
+  z-index: 3;
+  width: 100%;
+  height: calc(100% - 124px);
+  object-fit: contain;
+  object-position: center;
+}
+
+.fallbackPoster {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 72px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
+  background-size: 60px 60px;
+}
+
+.fallbackPoster span {
+  margin-bottom: 22px;
+  font-size: 82px;
+  font-weight: 950;
+  line-height: 0.9;
+}
+
+.fallbackPoster strong {
+  font-size: 82px;
+  line-height: 1;
+}
+
+.fallbackPoster small {
+  margin-top: 18px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 34px;
+  font-weight: 850;
+}
+
+.imageOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.08), transparent 42%, rgba(0, 0, 0, 0.78)),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.16), transparent 46%);
+}
+
+.caseCaption {
+  position: absolute;
+  z-index: 5;
+  left: 104px;
+  right: 104px;
+  top: 730px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 42px;
+}
+
+.caseIdentity {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.caseIdentity span {
+  width: 68px;
+  height: 68px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: #071017;
+  font-size: 28px;
+  font-weight: 950;
+}
+
+.caseIdentity h2 {
+  margin: 0 0 8px;
+  font-size: 58px;
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.caseIdentity p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 27px;
+  font-weight: 780;
+}
+
+.caseCaption > strong {
+  font-size: 58px;
+  font-weight: 950;
+  line-height: 1;
+  text-align: right;
+}
+
+.subtitleBar {
+  position: absolute;
+  z-index: 30;
+  left: 184px;
+  right: 184px;
+  bottom: 88px;
+  min-height: 82px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px 40px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.76);
+  box-shadow: 0 18px 54px rgba(0, 0, 0, 0.38);
+  color: #ffffff;
+  font-size: 36px;
+  font-weight: 900;
+  line-height: 1.22;
+  text-align: center;
+}
+
+.closingScene {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0 128px 80px;
+}
+
+.closingScene h2 {
+  width: 1280px;
+  margin: 0;
+  font-size: 94px;
+  line-height: 1.08;
+  letter-spacing: 0;
+}
+
+.ticker {
+  position: absolute;
+  z-index: 15;
+  left: 0;
+  bottom: 28px;
+  width: 2600px;
+  color: rgba(255, 255, 255, 0.2);
+  font-size: 27px;
+  font-weight: 900;
+  letter-spacing: 0;
+  white-space: pre;
+}
