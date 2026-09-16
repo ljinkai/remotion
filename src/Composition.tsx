@@ -11,6 +11,7 @@ import {
   useVideoConfig,
   type CalculateMetadataFunction,
 } from "remotion";
+import React, { useState } from "react";
 import {
   buildSceneSegments,
   defaultVideoProps,
@@ -22,6 +23,8 @@ import {
   type WeeklyCase,
   type WeeklyVideoProps,
 } from "./videoData";
+import { getVideoTemplate } from "./videoTemplates";
+import { getVideoFormat } from "./videoFormats";
 
 const calculateMetadata: CalculateMetadataFunction<WeeklyVideoProps> = ({
   props,
@@ -32,17 +35,32 @@ const calculateMetadata: CalculateMetadataFunction<WeeklyVideoProps> = ({
 };
 
 export const MyComposition = () => {
+  const landscape = getVideoFormat("landscape");
+  const portrait = getVideoFormat("portrait");
+
   return (
-    <Composition
-      id="IndieWeeklyMarkdown"
-      component={MyComponent}
-      durationInFrames={getDurationInFrames(defaultVideoProps)}
-      fps={30}
-      width={1920}
-      height={1080}
-      defaultProps={defaultVideoProps}
-      calculateMetadata={calculateMetadata}
-    />
+    <>
+      <Composition
+        id={landscape.compositionId}
+        component={MyComponent}
+        durationInFrames={getDurationInFrames(defaultVideoProps)}
+        fps={30}
+        width={landscape.width}
+        height={landscape.height}
+        defaultProps={{ ...defaultVideoProps, aspect: "landscape" }}
+        calculateMetadata={calculateMetadata}
+      />
+      <Composition
+        id={portrait.compositionId}
+        component={MyComponent}
+        durationInFrames={getDurationInFrames(defaultVideoProps)}
+        fps={30}
+        width={portrait.width}
+        height={portrait.height}
+        defaultProps={{ ...defaultVideoProps, aspect: "portrait" }}
+        calculateMetadata={calculateMetadata}
+      />
+    </>
   );
 };
 
@@ -57,23 +75,77 @@ const fade = (frame: number, start: number, end: number) =>
 const sceneProgress = (frame: number, durationFrames: number) =>
   interpolate(frame, [0, Math.max(durationFrames - 1, 1)], [0, 1], clamp);
 
+/** Cover H1 size by Chinese/Latin title length. */
+export const fitCoverTitleSize = (title: string, portrait = false) => {
+  const len = [...title.trim()].length;
+  let size = 132;
+  if (len <= 6) {
+    size = 132;
+  } else if (len <= 10) {
+    size = 104;
+  } else if (len <= 16) {
+    size = 84;
+  } else if (len <= 24) {
+    size = 68;
+  } else {
+    size = 56;
+  }
+  return portrait ? Math.round(size * 0.62) : size;
+};
+
+/** Case meta title — keeps strip height stable. */
+export const fitCaseTitleSize = (title: string, portrait = false) => {
+  const len = [...title.trim()].length;
+  let size = 42;
+  if (len <= 12) {
+    size = 42;
+  } else if (len <= 20) {
+    size = 34;
+  } else if (len <= 32) {
+    size = 28;
+  } else {
+    size = 24;
+  }
+  return portrait ? Math.round(size * 0.85) : size;
+};
+
+export const fitSubtitleSize = (text: string, portrait = false) => {
+  const len = [...text.trim()].length;
+  let size = 34;
+  if (len <= 28) {
+    size = 34;
+  } else if (len <= 48) {
+    size = 30;
+  } else if (len <= 72) {
+    size = 26;
+  } else {
+    size = 24;
+  }
+  return portrait ? Math.round(size * 0.9) : size;
+};
+
 export const assetSrc = (src: string) => {
-  if (/^(https?:|data:|blob:|\/)/.test(src)) {
+  if (!src || !String(src).trim()) {
     return src;
   }
-  if (
-    typeof window !== "undefined" &&
-    (src.startsWith(".generated/") || src.startsWith("case-images/"))
-  ) {
-    return `/${src}`;
+  const trimmed = String(src).trim();
+  // Remote / data URLs — use as-is
+  if (/^(https?:|data:|blob:)/i.test(trimmed)) {
+    return trimmed;
   }
-  return staticFile(src);
+  // Files under public/ must go through staticFile so Remotion CLI render
+  // resolves them from the project public folder (not the webpack temp bundle).
+  // Do NOT branch on `window`: headless Chrome during render also has window,
+  // and a bare "/.generated/..." path 404s against the bundle server.
+  const cleaned = trimmed.replace(/^\/+/, "");
+  return staticFile(cleaned);
 };
 
 const SceneSubtitles: React.FC<{
   cues?: SubtitleCue[];
   fallbackText: string;
-}> = ({ cues, fallbackText }) => {
+  portrait?: boolean;
+}> = ({ cues, fallbackText, portrait = false }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const sceneMs = (frame / fps) * 1000;
@@ -85,7 +157,12 @@ const SceneSubtitles: React.FC<{
 
   return (
     <div className="sceneSubtitleRegion">
-      <p className="sceneSubtitleText">{text}</p>
+      <p
+        className="sceneSubtitleText"
+        style={{ fontSize: fitSubtitleSize(text, portrait) }}
+      >
+        {text}
+      </p>
     </div>
   );
 };
@@ -111,48 +188,238 @@ const Header: React.FC<{ video: WeeklyVideoProps }> = ({ video }) => {
   );
 };
 
-const CoverScene: React.FC<{ video: WeeklyVideoProps }> = ({ video }) => {
+type CoverTileLayout = {
+  top: string;
+  left: string;
+  width: string;
+  height: string;
+  driftX: number;
+  driftY: number;
+  rotate: number;
+  z: number;
+};
+
+const LANDSCAPE_COVER_TILES: CoverTileLayout[] = [
+  { top: "-4%", left: "-2%", width: "46%", height: "58%", driftX: -28, driftY: 18, rotate: -2.5, z: 1 },
+  { top: "8%", left: "38%", width: "42%", height: "48%", driftX: 22, driftY: -16, rotate: 1.8, z: 2 },
+  { top: "42%", left: "68%", width: "36%", height: "52%", driftX: 18, driftY: 24, rotate: -1.2, z: 3 },
+  { top: "52%", left: "8%", width: "34%", height: "46%", driftX: -16, driftY: 20, rotate: 2.2, z: 2 },
+  { top: "-6%", left: "72%", width: "30%", height: "40%", driftX: 14, driftY: -12, rotate: 3, z: 1 },
+  { top: "58%", left: "48%", width: "28%", height: "38%", driftX: -10, driftY: 14, rotate: -2, z: 1 },
+];
+
+const PORTRAIT_COVER_TILES: CoverTileLayout[] = [
+  { top: "-2%", left: "-6%", width: "62%", height: "36%", driftX: -18, driftY: 14, rotate: -2, z: 1 },
+  { top: "8%", left: "42%", width: "64%", height: "32%", driftX: 16, driftY: -12, rotate: 1.6, z: 2 },
+  { top: "34%", left: "-4%", width: "58%", height: "30%", driftX: -14, driftY: 18, rotate: 2, z: 2 },
+  { top: "42%", left: "48%", width: "58%", height: "34%", driftX: 12, driftY: 16, rotate: -1.4, z: 3 },
+  { top: "68%", left: "6%", width: "54%", height: "30%", driftX: -10, driftY: 12, rotate: 1.2, z: 1 },
+  { top: "72%", left: "52%", width: "52%", height: "28%", driftX: 10, driftY: -8, rotate: -2.2, z: 2 },
+];
+
+const CoverImageBackdrop: React.FC<{
+  cases: WeeklyCase[];
+  portrait: boolean;
+}> = ({ cases, portrait }) => {
+  const frame = useCurrentFrame();
+  const { durationInFrames } = useVideoConfig();
+  const images = cases
+    .map((item) => item.image.trim())
+    .filter(Boolean)
+    .slice(0, 6);
+  const layouts = portrait ? PORTRAIT_COVER_TILES : LANDSCAPE_COVER_TILES;
+
+  if (images.length === 0) {
+    return <AbsoluteFill className="coverBackdrop coverBackdrop--empty" />;
+  }
+
+  return (
+    <AbsoluteFill className="coverBackdrop">
+      {images.map((src, index) => {
+        const layout = layouts[index % layouts.length];
+        const appear = interpolate(
+          frame,
+          [index * 5, index * 5 + 14],
+          [0, 1],
+          clamp,
+        );
+        const zoom = interpolate(
+          frame,
+          [0, Math.max(durationInFrames - 1, 1)],
+          [1.06, 1.18],
+          clamp,
+        );
+        const shiftX = interpolate(
+          frame,
+          [0, Math.max(durationInFrames - 1, 1)],
+          [0, layout.driftX],
+          clamp,
+        );
+        const shiftY = interpolate(
+          frame,
+          [0, Math.max(durationInFrames - 1, 1)],
+          [0, layout.driftY],
+          clamp,
+        );
+
+        return (
+          <div
+            key={`${src}-${index}`}
+            className="coverTile"
+            style={{
+              top: layout.top,
+              left: layout.left,
+              width: layout.width,
+              height: layout.height,
+              zIndex: layout.z,
+              opacity: appear * 0.92,
+              transform: `rotate(${layout.rotate}deg)`,
+            }}
+          >
+            <Img
+              className="coverTileImg"
+              src={assetSrc(src)}
+              onError={(event) => {
+                event.currentTarget.style.display = "none";
+              }}
+              style={{
+                transform: `translate(${shiftX}px, ${shiftY}px) scale(${zoom})`,
+              }}
+            />
+          </div>
+        );
+      })}
+      <AbsoluteFill className="coverBackdropVeil" />
+      <AbsoluteFill className="coverBackdropGrain" />
+    </AbsoluteFill>
+  );
+};
+
+const CoverScene: React.FC<{
+  video: WeeklyVideoProps;
+  portrait?: boolean;
+}> = ({ video, portrait = false }) => {
   const frame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
-  const entrance = spring({
+  const brandIn = spring({
     frame,
+    fps,
+    config: { damping: 16, stiffness: 80 },
+  });
+  const issueIn = spring({
+    frame: Math.max(frame - 6, 0),
+    fps,
+    config: { damping: 14, stiffness: 70 },
+  });
+  const themeIn = spring({
+    frame: Math.max(frame - 14, 0),
     fps,
     config: { damping: 18, stiffness: 90 },
   });
+  const lineWidth = interpolate(brandIn, [0, 1], [0, portrait ? 160 : 220], clamp);
+  const brandSize = portrait ? 28 : 36;
+  const issueSize = portrait ? 72 : 110;
+  const themeSize = fitCoverTitleSize(video.coverTitle, portrait);
 
   return (
     <AbsoluteFill className="coverSceneLayout">
+      <CoverImageBackdrop cases={video.cases} portrait={portrait} />
       <section
         className="coverScene"
         style={{ opacity: fade(frame, 0, durationInFrames) }}
       >
-        <div
-          className="coverTitle"
-          style={{
-            transform: `translateY(${interpolate(entrance, [0, 1], [48, 0])}px)`,
-          }}
-        >
-          <p>第{video.issueNumber}期</p>
-          <h1>{video.coverTitle}</h1>
-          <span>{video.coverSubtitle}</span>
+        <div className="coverMain">
+          <div className="coverBrandBlock">
+            <p
+              className="coverBrandName"
+              style={{
+                fontSize: brandSize,
+                opacity: brandIn,
+                transform: `translateY(${interpolate(brandIn, [0, 1], [24, 0])}px)`,
+              }}
+            >
+              {video.headerTitle}
+            </p>
+            <div
+              className="coverBrandLine"
+              style={{ width: lineWidth, opacity: brandIn }}
+            />
+            <h1
+              className="coverIssueNumber"
+              style={{
+                fontSize: issueSize,
+                opacity: issueIn,
+                transform: `translateY(${interpolate(issueIn, [0, 1], [36, 0])}px)`,
+              }}
+            >
+              第{video.issueNumber}期
+            </h1>
+            <div
+              className="coverThemeBlock"
+              style={{
+                opacity: themeIn,
+                transform: `translateY(${interpolate(themeIn, [0, 1], [28, 0])}px)`,
+              }}
+            >
+              <h2 className="coverThemeTitle" style={{ fontSize: themeSize }}>
+                {video.coverTitle}
+              </h2>
+              <span
+                className="coverThemeSub"
+                style={portrait ? { fontSize: 26 } : undefined}
+              >
+                {video.coverSubtitle}
+              </span>
+            </div>
+          </div>
+          {video.coverBadge ? (
+            <div
+              className="coverBadge"
+              style={{
+                opacity: themeIn,
+                ...(portrait
+                  ? { fontSize: 28, padding: "16px 20px" }
+                  : undefined),
+              }}
+            >
+              {video.coverBadge}
+            </div>
+          ) : null}
         </div>
-        <div className="coverBadge">{video.coverBadge}</div>
       </section>
-      <SceneSubtitles cues={video.introCues} fallbackText={video.introSubtitle} />
+      <SceneSubtitles
+        cues={video.introCues}
+        fallbackText={video.introSubtitle}
+        portrait={portrait}
+      />
     </AbsoluteFill>
   );
 };
+
+type ImageShape = "unknown" | "landscape" | "portrait";
 
 const CaseImage: React.FC<{
   item: WeeklyCase;
   imageScale: number;
   imageY: number;
-}> = ({ item, imageScale, imageY }) => {
+  onShape: (shape: ImageShape) => void;
+  onBroken: () => void;
+}> = ({ item, imageScale, imageY, onShape, onBroken }) => {
   const src = item.image.trim();
 
   if (!src) {
     return null;
   }
+
+  const markShape = (event: React.SyntheticEvent<HTMLImageElement>) => {
+    const img = event.currentTarget;
+    if (!img.naturalWidth || !img.naturalHeight) {
+      return;
+    }
+    onShape(
+      img.naturalHeight > img.naturalWidth * 1.12 ? "portrait" : "landscape",
+    );
+  };
 
   return (
     <>
@@ -160,7 +427,9 @@ const CaseImage: React.FC<{
         className="caseImageBg"
         onError={(event) => {
           event.currentTarget.style.display = "none";
+          onBroken();
         }}
+        onLoad={markShape}
         src={assetSrc(src)}
         style={{
           transform: `translateY(${imageY}px) scale(${imageScale})`,
@@ -170,29 +439,59 @@ const CaseImage: React.FC<{
         className="caseImage"
         onError={(event) => {
           event.currentTarget.style.display = "none";
+          onBroken();
         }}
+        onLoad={markShape}
         src={assetSrc(src)}
       />
     </>
   );
 };
 
-const CaseScene: React.FC<{ item: WeeklyCase }> = ({ item }) => {
+const CaseScene: React.FC<{ item: WeeklyCase; portrait?: boolean }> = ({
+  item,
+  portrait = false,
+}) => {
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
   const progress = sceneProgress(frame, durationInFrames);
   const imageScale = interpolate(progress, [0, 1], [1.04, 1.01]);
   const imageY = interpolate(progress, [0, 1], [0, -16]);
   const meta = [item.author, item.date].filter(Boolean).join(" · ");
+  const hasImageSrc = Boolean(item.image.trim());
+  const [imageShape, setImageShape] = useState<ImageShape>("unknown");
+  const [imageBroken, setImageBroken] = useState(false);
+  const showFallbackOnly = !hasImageSrc || imageBroken;
+  const stageClass = [
+    "imageStage",
+    showFallbackOnly ? "imageStage--empty" : "",
+    !showFallbackOnly && imageShape === "portrait" ? "imageStage--portrait" : "",
+    !showFallbackOnly && imageShape === "landscape"
+      ? "imageStage--landscape"
+      : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <AbsoluteFill className="caseSceneLayout">
       <div className="caseImageRegion">
-        <div className="imageStage">
-          <CaseImage item={item} imageScale={imageScale} imageY={imageY} />
-          <div className="fallbackPoster" style={{ borderColor: item.color }}>
+        <div className={stageClass}>
+          {!showFallbackOnly ? (
+            <CaseImage
+              item={item}
+              imageScale={imageScale}
+              imageY={imageY}
+              onShape={setImageShape}
+              onBroken={() => setImageBroken(true)}
+            />
+          ) : null}
+          <div
+            className={`fallbackPoster${showFallbackOnly ? " fallbackPoster--solo" : ""}`}
+            style={{ borderColor: item.color }}
+          >
             <span style={{ color: item.color }}>{item.index}</span>
-            <strong>{item.fallback}</strong>
+            <strong>{item.fallback || item.title}</strong>
             <small>{item.title}</small>
           </div>
         </div>
@@ -201,22 +500,34 @@ const CaseScene: React.FC<{ item: WeeklyCase }> = ({ item }) => {
       <div className="caseMetaStrip">
         <div className="caseIdentity">
           <span style={{ background: item.color }}>{item.index}</span>
-          <div>
-            <h2>{item.title}</h2>
+          <div className="caseIdentityText">
+            <h2 style={{ fontSize: fitCaseTitleSize(item.title, portrait) }}>
+              {item.title}
+            </h2>
             <p>{meta || "精选内容"}</p>
           </div>
         </div>
-        <strong style={{ color: item.color }}>{item.metric}</strong>
+        <strong className="caseMetric" style={{ color: item.color }}>
+          {item.metric}
+        </strong>
       </div>
 
-      <SceneSubtitles cues={item.cues} fallbackText={item.subtitle} />
+      <SceneSubtitles
+        cues={item.cues}
+        fallbackText={item.subtitle}
+        portrait={portrait}
+      />
     </AbsoluteFill>
   );
 };
 
-const ClosingScene: React.FC<{ video: WeeklyVideoProps }> = ({ video }) => {
+const ClosingScene: React.FC<{
+  video: WeeklyVideoProps;
+  portrait?: boolean;
+}> = ({ video, portrait = false }) => {
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
+  const closingSize = fitCoverTitleSize(video.closingSubtitle, portrait);
 
   return (
     <AbsoluteFill className="closingSceneLayout">
@@ -225,30 +536,55 @@ const ClosingScene: React.FC<{ video: WeeklyVideoProps }> = ({ video }) => {
         style={{ opacity: fade(frame, 0, durationInFrames) }}
       >
         <p>{video.closingTitle}</p>
-        <h2>{video.closingSubtitle}</h2>
+        <h2
+          style={{
+            fontSize: Math.max(
+              portrait ? 40 : 48,
+              Math.min(portrait ? 64 : 94, closingSize),
+            ),
+          }}
+        >
+          {video.closingSubtitle}
+        </h2>
       </section>
       <SceneSubtitles
         cues={video.closingCues}
         fallbackText={video.closingSubtitle}
+        portrait={portrait}
       />
     </AbsoluteFill>
   );
 };
 
 export const MyComponent: React.FC<WeeklyVideoProps> = (props) => {
-  const frame = useCurrentFrame();
+  const { width, height } = useVideoConfig();
   const video = normalizeVideoProps(props);
-  const segments = buildSceneSegments(video);
-  const duration = getDurationInFrames(video);
-  const synthesized = hasSynthesizedTimeline(video);
+  const format = getVideoFormat(video.aspect);
+  const portrait = height > width || format.id === "portrait";
+  const template = getVideoTemplate(video.templateId);
+  const themedVideo: WeeklyVideoProps = {
+    ...video,
+    templateId: template.id,
+    aspect: format.id,
+    cases: video.cases.map((item, index) => ({
+      ...item,
+      color: template.caseColors[index % template.caseColors.length],
+    })),
+  };
+  const segments = buildSceneSegments(themedVideo);
+  const synthesized = hasSynthesizedTimeline(themedVideo);
 
   return (
-    <AbsoluteFill className="scene">
-      {!synthesized && video.audioSrc ? (
-        <Audio src={assetSrc(video.audioSrc)} volume={0.95} />
+    <AbsoluteFill
+      className="scene"
+      data-template={template.id}
+      data-aspect={portrait ? "portrait" : "landscape"}
+    >
+      {!synthesized && themedVideo.audioSrc ? (
+        <Audio src={assetSrc(themedVideo.audioSrc)} volume={0.95} />
       ) : null}
       <AbsoluteFill className="softBackdrop" />
-      <Header video={video} />
+      <Header video={themedVideo} />
 
       {segments.map((segment) => {
         if (segment.type === "intro") {
@@ -258,16 +594,16 @@ export const MyComponent: React.FC<WeeklyVideoProps> = (props) => {
               from={segment.startFrame}
               durationInFrames={segment.durationFrames}
             >
-              {video.introAudioSrc ? (
-                <Audio src={assetSrc(video.introAudioSrc)} volume={0.95} />
+              {themedVideo.introAudioSrc ? (
+                <Audio src={assetSrc(themedVideo.introAudioSrc)} volume={0.95} />
               ) : null}
-              <CoverScene video={video} />
+              <CoverScene video={themedVideo} portrait={portrait} />
             </Sequence>
           );
         }
 
         if (segment.type === "case" && segment.caseIndex !== undefined) {
-          const item = video.cases[segment.caseIndex];
+          const item = themedVideo.cases[segment.caseIndex];
           return (
             <Sequence
               key={segment.id}
@@ -277,7 +613,7 @@ export const MyComponent: React.FC<WeeklyVideoProps> = (props) => {
               {item.audioSrc ? (
                 <Audio src={assetSrc(item.audioSrc)} volume={0.95} />
               ) : null}
-              <CaseScene item={item} />
+              <CaseScene item={item} portrait={portrait} />
             </Sequence>
           );
         }
@@ -288,22 +624,13 @@ export const MyComponent: React.FC<WeeklyVideoProps> = (props) => {
             from={segment.startFrame}
             durationInFrames={segment.durationFrames}
           >
-            {video.closingAudioSrc ? (
-              <Audio src={assetSrc(video.closingAudioSrc)} volume={0.95} />
+            {themedVideo.closingAudioSrc ? (
+              <Audio src={assetSrc(themedVideo.closingAudioSrc)} volume={0.95} />
             ) : null}
-            <ClosingScene video={video} />
+            <ClosingScene video={themedVideo} portrait={portrait} />
           </Sequence>
         );
       })}
-
-      <div
-        className="ticker"
-        style={{
-          transform: `translateX(${interpolate(frame, [0, duration], [0, -640])}px)`,
-        }}
-      >
-        {video.ticker}
-      </div>
     </AbsoluteFill>
   );
 };

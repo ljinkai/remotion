@@ -66,7 +66,10 @@ Manual rendering still works too:
 
 ```console
 npx remotion render IndieWeeklyMarkdown out/video.mp4 --props=props.json
+npx remotion render IndieWeeklyMarkdownPortrait out/video-portrait.mp4 --props=props.json
 ```
+
+Workbench can switch **横屏 16:9** / **竖屏 9:16** and visual templates before preview or export. Props field `aspect` is `"landscape"` | `"portrait"`.
 
 ## Render service API (`/api/v1`)
 
@@ -85,9 +88,16 @@ Create body:
   "markdown": "---\\nissue: 156\\n...",
   "client_ref": "vidflow-issue-uuid",
   "callback_url": "https://vidflow.example/api/hooks/remotion/video-jobs",
-  "options": { "skip_ai_script": false, "voice": "zh-CN-YunxiNeural" }
+  "options": {
+    "skip_ai_script": false,
+    "voice": "zh-CN-YunxiNeural",
+    "aspect": "landscape",
+    "template_id": "midnight"
+  }
 }
 ```
+
+`options.aspect`: `"landscape"`（默认 16:9）或 `"portrait"`（9:16）。
 
 Pipeline: Markdown → Qwen script (unless skip / full `旁白`) → Azure TTS → Remotion MP4 → Qiniu → **POST webhook**.
 

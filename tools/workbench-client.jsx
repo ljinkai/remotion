@@ -12,14 +12,29 @@ import {
   scriptIsComplete,
 } from "../src/narrationScript";
 import { getDurationInFrames } from "../src/videoData";
+import {
+  VIDEO_TEMPLATES,
+  resolveTemplateId,
+} from "../src/videoTemplates";
+import {
+  VIDEO_FORMATS,
+  getVideoFormat,
+  resolveAspect,
+} from "../src/videoFormats";
 import { CueTimelinePanel } from "./cue-timeline-panel";
 
 const savedMarkdown =
   localStorage.getItem("remotion-markdown") || sampleMarkdown;
+const savedTemplate = resolveTemplateId(
+  localStorage.getItem("remotion-template"),
+);
+const savedAspect = resolveAspect(localStorage.getItem("remotion-aspect"));
 
 function App() {
   const playerRef = useRef(null);
   const [markdown, setMarkdown] = useState(savedMarkdown);
+  const [templateId, setTemplateId] = useState(savedTemplate);
+  const [aspect, setAspect] = useState(savedAspect);
   const [rendering, setRendering] = useState(false);
   const [synthesizing, setSynthesizing] = useState(false);
   const [scripting, setScripting] = useState(false);
@@ -37,10 +52,35 @@ function App() {
     () => (script ? applyNarrationScript(parsedProps, script) : parsedProps),
     [parsedProps, script],
   );
-  const props = synthesizedProps ?? scriptedProps;
+  const props = useMemo(
+    () => ({
+      ...(synthesizedProps ?? scriptedProps),
+      templateId,
+      aspect,
+    }),
+    [synthesizedProps, scriptedProps, templateId, aspect],
+  );
   const durationInFrames = useMemo(() => getDurationInFrames(props), [props]);
   const hasVoice = props.useSynthesizedTimeline === true;
   const hasScript = scriptIsComplete(script);
+  const activeTemplate =
+    VIDEO_TEMPLATES.find((item) => item.id === templateId) ||
+    VIDEO_TEMPLATES[0];
+  const activeFormat = getVideoFormat(aspect);
+
+  const selectTemplate = (id) => {
+    const next = resolveTemplateId(id);
+    setTemplateId(next);
+    localStorage.setItem("remotion-template", next);
+  };
+
+  const selectAspect = (id) => {
+    const next = resolveAspect(id);
+    setAspect(next);
+    localStorage.setItem("remotion-aspect", next);
+    setCurrentFrame(0);
+    playerRef.current?.seekTo(0);
+  };
 
   useEffect(() => {
     const player = playerRef.current;
@@ -297,16 +337,69 @@ function App() {
       </section>
 
       <section className="preview">
-        <div className="stage">
+        <div className="templateBar">
+          <div className="templateBarHead">
+            <strong>画幅</strong>
+            <span className="meta">{activeFormat.blurb}</span>
+          </div>
+          <div className="formatGrid">
+            {VIDEO_FORMATS.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={`formatCard${aspect === item.id ? " active" : ""}`}
+                onClick={() => selectAspect(item.id)}
+                title={item.blurb}
+              >
+                <span
+                  className={`formatIcon formatIcon--${item.id}`}
+                  aria-hidden
+                />
+                <span className="templateLabel">{item.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="templateBar">
+          <div className="templateBarHead">
+            <strong>画面模板</strong>
+            <span className="meta">{activeTemplate.blurb}</span>
+          </div>
+          <div className="templateGrid">
+            {VIDEO_TEMPLATES.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={`templateCard${templateId === item.id ? " active" : ""}`}
+                onClick={() => selectTemplate(item.id)}
+                title={item.blurb}
+              >
+                <span
+                  className="templateSwatch"
+                  data-template={item.id}
+                  aria-hidden
+                />
+                <span className="templateLabel">{item.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+        <div
+          className={`stage${aspect === "portrait" ? " stage--portrait" : ""}`}
+        >
           <Player
             ref={playerRef}
             component={MyComponent}
             inputProps={props}
             durationInFrames={durationInFrames}
             fps={30}
-            compositionWidth={1920}
-            compositionHeight={1080}
-            style={{ width: "100%", aspectRatio: "16 / 9" }}
+            compositionWidth={activeFormat.width}
+            compositionHeight={activeFormat.height}
+            style={
+              aspect === "portrait"
+                ? { width: "auto", height: "min(72vh, 720px)", aspectRatio: "9 / 16" }
+                : { width: "100%", aspectRatio: "16 / 9" }
+            }
             controls
             loop
           />
@@ -336,7 +429,8 @@ function App() {
           onSeek={seekToCue}
         />
         <p className="meta">
-          逐字稿：<code>{hasScript ? script.source : "未生成"}</code> · 语音：
+          画幅：<code>{aspect}</code> · 模板：<code>{templateId}</code> · 逐字稿：
+          <code>{hasScript ? script.source : "未生成"}</code> · 语音：
           <code>{hasVoice ? "已合成" : "未合成"}</code> · 输出：
           <code>out/</code>
         </p>

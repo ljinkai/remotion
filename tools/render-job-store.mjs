@@ -108,6 +108,7 @@ export const publicJobView = (job) => ({
   client_ref: job.client_ref,
   status: job.status,
   progress: job.progress ?? 0,
+  aspect: job.options?.aspect || "landscape",
   video_url: job.video_url ?? null,
   script: job.script ?? null,
   error: job.error ?? null,

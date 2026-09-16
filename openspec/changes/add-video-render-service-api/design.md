@@ -57,7 +57,9 @@ VidFlow 侧已有本地 `weekly_video` 管线（自建 script + edge-tts + `vidf
   "callback_url": "https://vidflow.example/api/hooks/remotion/video-jobs",
   "options": {
     "skip_ai_script": false,
-    "voice": "zh-CN-YunxiNeural"
+    "voice": "zh-CN-YunxiNeural",
+    "aspect": "landscape",
+    "template_id": "midnight"
   }
 }
 ```
@@ -66,6 +68,8 @@ VidFlow 侧已有本地 `weekly_video` 管线（自建 script + edge-tts + `vidf
 - `client_ref`：调用方关联 ID（VidFlow 的 `issue_id`），原样回传 hook
 - `callback_url`：**必填**（服务模式）；任务终态 POST 到此 URL
 - `skip_ai_script`：若 MD 已含完整 `旁白:` 可跳过千问
+- `options.aspect`：`"landscape"`（默认，1920×1080）或 `"portrait"`（1080×1920）；非法值按 landscape
+- `options.template_id`：可选画面模板（midnight / noir / ocean / ember / studio）
 
 成功创建 `202`：
 
@@ -73,7 +77,8 @@ VidFlow 侧已有本地 `weekly_video` 管线（自建 script + edge-tts + `vidf
 {
   "job_id": "...",
   "status": "queued",
-  "client_ref": "..."
+  "client_ref": "...",
+  "aspect": "landscape"
 }
 ```
 

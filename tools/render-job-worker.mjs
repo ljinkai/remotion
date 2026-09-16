@@ -13,6 +13,7 @@ import {
   readJob,
   updateJob,
 } from "./render-job-store.mjs";
+import { normalizeRenderJobOptions } from "./render-job-options.mjs";
 
 const DEFAULT_RENDER_API_KEY = "vidflow-remotion-shared-key-2026";
 
@@ -97,11 +98,16 @@ const localRemotionCommand = (root) =>
 
 const renderToPath = async (root, props, outputPath, propsPath) => {
   await writeFile(propsPath, JSON.stringify(props, null, 2), "utf8");
+  const aspect = props?.aspect === "portrait" ? "portrait" : "landscape";
+  const compositionId =
+    aspect === "portrait"
+      ? "IndieWeeklyMarkdownPortrait"
+      : "IndieWeeklyMarkdown";
   const command = localRemotionCommand(root);
   await new Promise((resolve, reject) => {
     const proc = spawn(
       command,
-      ["render", "IndieWeeklyMarkdown", outputPath, `--props=${propsPath}`],
+      ["render", compositionId, outputPath, `--props=${propsPath}`],
       { cwd: root, stdio: ["ignore", "pipe", "pipe"] },
     );
     let stderr = "";
@@ -164,6 +170,11 @@ const runOneJob = async (root, jobId) => {
       script = await generateNarrationScript(props);
     }
     props = runtime.applyNarrationScript(props, script);
+    const options = normalizeRenderJobOptions(job.options);
+    props.aspect = options.aspect;
+    if (options.templateId || options.template_id) {
+      props.templateId = options.templateId || options.template_id;
+    }
     await updateJob(root, jobId, {
       script: {
         intro: script.intro,
@@ -171,6 +182,7 @@ const runOneJob = async (root, jobId) => {
         closing: script.closing,
         source: script.source,
       },
+      options,
     });
     await writeFile(
       path.join(workDir, "script.json"),
@@ -178,7 +190,7 @@ const runOneJob = async (root, jobId) => {
       "utf8",
     );
 
-    const voice = job.options?.voice?.trim();
+    const voice = options.voice?.trim();
     const previousVoice = process.env.AZURE_SPEECH_VOICE;
     if (voice) {
       process.env.AZURE_SPEECH_VOICE = voice;
@@ -189,6 +201,10 @@ const runOneJob = async (root, jobId) => {
     try {
       const synth = await synthesizeVideoProps(props, { root });
       enriched = synth.props;
+      enriched.aspect = options.aspect;
+      if (props.templateId) {
+        enriched.templateId = props.templateId;
+      }
     } finally {
       if (voice) {
         if (previousVoice === undefined) {

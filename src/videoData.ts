@@ -1,3 +1,6 @@
+import { resolveTemplateId } from "./videoTemplates";
+import { resolveAspect } from "./videoFormats";
+
 export type SubtitleCue = {
   text: string;
   startMs: number;
@@ -29,6 +32,10 @@ export type WeeklyVideoProps = {
   closingTitle: string;
   closingSubtitle: string;
   ticker: string;
+  /** Visual template id — see videoTemplates.ts */
+  templateId?: string;
+  /** Output aspect — landscape 16:9 or portrait 9:16 */
+  aspect?: string;
   audioSrc?: string;
   useSynthesizedTimeline?: boolean;
   introDurationMs?: number;
@@ -199,6 +206,8 @@ export const normalizeVideoProps = (
       defaultVideoProps.closingSubtitle,
     ),
     ticker: clean(source.ticker, defaultVideoProps.ticker),
+    templateId: resolveTemplateId(source.templateId),
+    aspect: resolveAspect(source.aspect),
     useSynthesizedTimeline: source.useSynthesizedTimeline === true,
     introDurationMs:
       typeof source.introDurationMs === "number"

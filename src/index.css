@@ -14,15 +14,101 @@ body {
 
 .scene {
   overflow: hidden;
-  color: #ffffff;
-  background: #07090d;
+  color: var(--fg, #ffffff);
+  background: var(--bg, #07090d);
+  --bg: #07090d;
+  --bg-2: #111620;
+  --fg: #ffffff;
+  --fg-muted: rgba(255, 255, 255, 0.72);
+  --accent: #38d6c6;
+  --accent-2: #ff7b68;
+  --panel: rgba(0, 0, 0, 0.78);
+  --stage: #10141d;
+  --glow-a: rgba(56, 214, 198, 0.18);
+  --glow-b: rgba(255, 123, 104, 0.2);
+  --progress: linear-gradient(90deg, #38d6c6, #f6c95f, #ff7b68, #7aa7ff);
+  --cover-wash: linear-gradient(90deg, rgba(0, 0, 0, 0.52), transparent 72%),
+    radial-gradient(circle at 72% 54%, rgba(56, 214, 198, 0.22), transparent 28%);
+  --radius: 8px;
+  --subtitle-radius: 8px;
+}
+
+.scene[data-template="noir"] {
+  --bg: #050505;
+  --bg-2: #121212;
+  --fg: #f5f5f5;
+  --fg-muted: rgba(245, 245, 245, 0.7);
+  --accent: #e8c547;
+  --accent-2: #f5f5f5;
+  --panel: rgba(0, 0, 0, 0.86);
+  --stage: #0c0c0c;
+  --glow-a: rgba(232, 197, 71, 0.14);
+  --glow-b: rgba(255, 255, 255, 0.08);
+  --progress: linear-gradient(90deg, #e8c547, #f5f5f5, #c9a227);
+  --cover-wash: linear-gradient(90deg, rgba(0, 0, 0, 0.7), transparent 68%),
+    radial-gradient(circle at 78% 48%, rgba(232, 197, 71, 0.18), transparent 30%);
+  --radius: 0;
+  --subtitle-radius: 0;
+}
+
+.scene[data-template="ocean"] {
+  --bg: #061018;
+  --bg-2: #0b1c2c;
+  --fg: #eef8ff;
+  --fg-muted: rgba(238, 248, 255, 0.72);
+  --accent: #5ec8ff;
+  --accent-2: #7ad7c5;
+  --panel: rgba(4, 16, 28, 0.84);
+  --stage: #0a1824;
+  --glow-a: rgba(94, 200, 255, 0.2);
+  --glow-b: rgba(122, 215, 197, 0.16);
+  --progress: linear-gradient(90deg, #5ec8ff, #7ad7c5, #8aa4ff);
+  --cover-wash: linear-gradient(90deg, rgba(4, 18, 30, 0.62), transparent 70%),
+    radial-gradient(circle at 74% 52%, rgba(94, 200, 255, 0.24), transparent 30%);
+  --radius: 14px;
+  --subtitle-radius: 14px;
+}
+
+.scene[data-template="ember"] {
+  --bg: #120a08;
+  --bg-2: #1c100c;
+  --fg: #fff6f0;
+  --fg-muted: rgba(255, 246, 240, 0.74);
+  --accent: #ff8a5b;
+  --accent-2: #ffc857;
+  --panel: rgba(20, 8, 6, 0.84);
+  --stage: #1a100c;
+  --glow-a: rgba(255, 138, 91, 0.2);
+  --glow-b: rgba(255, 200, 87, 0.14);
+  --progress: linear-gradient(90deg, #ff8a5b, #ffc857, #ff6b6b);
+  --cover-wash: linear-gradient(90deg, rgba(20, 6, 4, 0.62), transparent 70%),
+    radial-gradient(circle at 76% 50%, rgba(255, 138, 91, 0.24), transparent 30%);
+  --radius: 10px;
+  --subtitle-radius: 10px;
+}
+
+.scene[data-template="studio"] {
+  --bg: #0e1116;
+  --bg-2: #161b22;
+  --fg: #f3f4f6;
+  --fg-muted: rgba(243, 244, 246, 0.7);
+  --accent: #64d2ff;
+  --accent-2: #a78bfa;
+  --panel: rgba(14, 17, 22, 0.92);
+  --stage: #141a22;
+  --glow-a: rgba(100, 210, 255, 0.1);
+  --glow-b: rgba(167, 139, 250, 0.1);
+  --progress: linear-gradient(90deg, #64d2ff, #a78bfa, #34d399);
+  --cover-wash: linear-gradient(105deg, rgba(14, 17, 22, 0.88), transparent 58%);
+  --radius: 4px;
+  --subtitle-radius: 4px;
 }
 
 .softBackdrop {
   background:
-    radial-gradient(circle at 16% 18%, rgba(56, 214, 198, 0.18), transparent 34%),
-    radial-gradient(circle at 86% 74%, rgba(255, 123, 104, 0.2), transparent 30%),
-    linear-gradient(135deg, #07090d 0%, #111620 56%, #080a0f 100%);
+    radial-gradient(circle at 16% 18%, var(--glow-a), transparent 34%),
+    radial-gradient(circle at 86% 74%, var(--glow-b), transparent 30%),
+    linear-gradient(135deg, var(--bg) 0%, var(--bg-2) 56%, var(--bg) 100%);
 }
 
 .header {
@@ -35,13 +121,13 @@ body {
   grid-template-columns: 260px 72px 1fr;
   gap: 24px;
   align-items: center;
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--fg-muted);
   font-size: 22px;
   font-weight: 850;
 }
 
 .header strong {
-  color: #ffffff;
+  color: var(--fg);
   font-size: 27px;
 }
 
@@ -55,7 +141,7 @@ body {
 .progressFill {
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #38d6c6, #f6c95f, #ff7b68, #7aa7ff);
+  background: var(--progress);
 }
 
 .coverSceneLayout,
@@ -64,6 +150,59 @@ body {
   display: flex;
   flex-direction: column;
   inset: 0;
+}
+
+.coverBackdrop {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.coverBackdrop--empty {
+  background:
+    radial-gradient(circle at 24% 30%, var(--glow-a), transparent 42%),
+    radial-gradient(circle at 78% 68%, var(--glow-b), transparent 36%),
+    linear-gradient(135deg, var(--bg) 0%, var(--bg-2) 100%);
+}
+
+.coverTile {
+  position: absolute;
+  overflow: hidden;
+  border-radius: calc(var(--radius) + 4px);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--stage);
+}
+
+.coverTileImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  filter: saturate(1.08) brightness(0.78);
+  transform-origin: center;
+}
+
+.coverBackdropVeil {
+  background:
+    linear-gradient(
+      105deg,
+      rgba(0, 0, 0, 0.78) 0%,
+      rgba(0, 0, 0, 0.52) 42%,
+      rgba(0, 0, 0, 0.28) 100%
+    ),
+    radial-gradient(circle at 70% 40%, transparent 0%, rgba(0, 0, 0, 0.35) 70%);
+}
+
+.coverBackdropGrain {
+  opacity: 0.18;
+  mix-blend-mode: soft-light;
+  background-image:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 48px 48px;
+  pointer-events: none;
 }
 
 .coverScene,
@@ -75,52 +214,102 @@ body {
 
 .coverScene {
   display: flex;
+  flex-direction: column;
+  padding: 0;
+  background: transparent;
+}
+
+.coverMain {
+  flex: 1;
+  min-height: 0;
+  display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 48px;
   padding: 0 118px;
-  background:
-    linear-gradient(90deg, rgba(0, 0, 0, 0.52), transparent 72%),
-    radial-gradient(circle at 72% 54%, rgba(56, 214, 198, 0.22), transparent 28%);
+}
+
+.coverBrandBlock {
+  flex: 1;
+  min-width: 0;
+  max-width: 1180px;
+}
+
+.coverBrandName {
+  margin: 0 0 18px;
+  color: var(--accent);
+  font-weight: 950;
+  letter-spacing: 0.04em;
+}
+
+.coverBrandLine {
+  height: 4px;
+  margin-bottom: 22px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+}
+
+.coverIssueNumber {
+  margin: 0 0 28px;
+  color: var(--fg);
+  font-weight: 950;
+  line-height: 0.95;
+  letter-spacing: -0.02em;
+  text-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+}
+
+.coverThemeBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.coverThemeTitle {
+  margin: 0;
+  max-width: 100%;
+  color: var(--fg);
+  font-weight: 900;
+  line-height: 1.08;
+  overflow-wrap: anywhere;
+  text-shadow: 0 12px 36px rgba(0, 0, 0, 0.4);
+}
+
+.coverThemeSub {
+  color: var(--fg-muted);
+  font-size: 40px;
+  font-weight: 820;
+}
+
+.coverBadge {
+  flex: 0 0 auto;
+  align-self: flex-end;
+  max-width: 420px;
+  margin-bottom: 12px;
+  padding: 24px 32px;
+  border-left: 8px solid var(--accent-2);
+  background: rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(10px);
+  font-size: 40px;
+  font-weight: 950;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
 }
 
 .coverTitle p,
 .closingScene p {
   margin: 0 0 22px;
-  color: #38d6c6;
+  color: var(--accent);
   font-size: 34px;
   font-weight: 950;
 }
 
-.coverTitle h1 {
-  margin: 0 0 28px;
-  font-size: 142px;
-  line-height: 0.95;
-  letter-spacing: 0;
-}
-
-.coverTitle span {
-  color: rgba(255, 255, 255, 0.78);
-  font-size: 44px;
-  font-weight: 820;
-}
-
-.coverBadge {
-  position: absolute;
-  right: 118px;
-  bottom: 214px;
-  padding: 24px 32px;
-  border-left: 8px solid #ff7b68;
-  background: rgba(255, 255, 255, 0.11);
-  font-size: 44px;
-  font-weight: 950;
-}
-
 .caseSceneLayout {
-  padding: 96px 72px 72px;
-  gap: 18px;
+  padding: 96px 72px 48px;
+  gap: 16px;
 }
 
 .caseImageRegion {
-  flex: 1 1 68%;
+  flex: 1 1 64%;
   min-height: 0;
 }
 
@@ -129,9 +318,27 @@ body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  border-radius: 8px;
-  background: #10141d;
+  border-radius: var(--radius);
+  background: var(--stage);
   box-shadow: 0 30px 90px rgba(0, 0, 0, 0.42);
+}
+
+.imageStage--portrait .caseImage {
+  inset: 18px 18%;
+  width: calc(100% - 36%);
+  height: calc(100% - 36px);
+}
+
+.imageStage--landscape .caseImage {
+  inset: 20px 36px;
+  width: calc(100% - 72px);
+  height: calc(100% - 40px);
+}
+
+.imageStage--empty {
+  background:
+    radial-gradient(circle at 30% 40%, var(--glow-a), transparent 42%),
+    var(--stage);
 }
 
 .caseImageBg {
@@ -172,6 +379,15 @@ body {
   background-size: 60px 60px;
 }
 
+.fallbackPoster--solo {
+  z-index: 4;
+  justify-content: center;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.03)),
+    radial-gradient(circle at 70% 30%, var(--glow-b), transparent 40%),
+    var(--stage);
+}
+
 .fallbackPoster span {
   margin-bottom: 22px;
   font-size: 82px;
@@ -180,8 +396,14 @@ body {
 }
 
 .fallbackPoster strong {
-  font-size: 82px;
-  line-height: 1;
+  max-width: 90%;
+  font-size: 72px;
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+
+.fallbackPoster--solo strong {
+  font-size: 64px;
 }
 
 .fallbackPoster small {
@@ -189,13 +411,16 @@ body {
   color: rgba(255, 255, 255, 0.7);
   font-size: 34px;
   font-weight: 850;
+  max-width: 90%;
+  overflow-wrap: anywhere;
 }
 
 .caseMetaStrip {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 42px;
+  gap: 32px;
+  min-height: 88px;
   padding: 0 8px;
 }
 
@@ -203,14 +428,22 @@ body {
   display: flex;
   align-items: center;
   gap: 24px;
+  min-width: 0;
+  flex: 1;
+}
+
+.caseIdentityText {
+  min-width: 0;
+  flex: 1;
 }
 
 .caseIdentity span {
+  flex: 0 0 auto;
   width: 68px;
   height: 68px;
   display: grid;
   place-items: center;
-  border-radius: 8px;
+  border-radius: var(--radius);
   color: #071017;
   font-size: 28px;
   font-weight: 950;
@@ -218,52 +451,63 @@ body {
 
 .caseIdentity h2 {
   margin: 0 0 8px;
-  font-size: 58px;
-  line-height: 1;
+  max-width: 100%;
+  font-size: 42px;
+  line-height: 1.15;
   letter-spacing: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
 }
 
 .caseIdentity p {
   margin: 0;
-  color: rgba(255, 255, 255, 0.76);
-  font-size: 27px;
-  font-weight: 780;
-}
-
-.caseMetaStrip > strong {
-  font-size: 42px;
-  font-weight: 950;
-  line-height: 1;
-  text-align: right;
-}
-
-.caseIdentity h2 {
-  font-size: 42px;
-}
-
-.caseIdentity p {
+  color: var(--fg-muted);
   font-size: 22px;
+  font-weight: 780;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.caseMetric {
+  flex: 0 0 auto;
+  max-width: 360px;
+  font-size: 36px;
+  font-weight: 950;
+  line-height: 1.15;
+  text-align: right;
+  overflow-wrap: anywhere;
 }
 
 .sceneSubtitleRegion {
   flex: 0 0 auto;
-  min-height: 120px;
+  min-height: 112px;
+  max-height: 168px;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 18px 32px;
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.76);
+  margin: 0 72px 40px;
+  padding: 16px 40px;
+  border-radius: var(--subtitle-radius);
+  background: var(--panel);
   box-shadow: 0 18px 54px rgba(0, 0, 0, 0.38);
+}
+
+.caseSceneLayout .sceneSubtitleRegion {
+  margin: 0 8px 8px;
 }
 
 .sceneSubtitleText {
   margin: 0;
-  color: #ffffff;
+  max-width: 1480px;
+  color: var(--fg);
   font-size: 34px;
   font-weight: 900;
-  line-height: 1.28;
+  line-height: 1.3;
   text-align: center;
+  overflow-wrap: anywhere;
 }
 
 .closingScene {
@@ -273,28 +517,136 @@ body {
   padding: 0 128px 24px;
 }
 
-.coverSceneLayout .sceneSubtitleRegion,
-.closingSceneLayout .sceneSubtitleRegion {
-  margin: 0 72px 72px;
-}
-
 .closingScene h2 {
-  width: 1280px;
+  max-width: 1400px;
+  width: auto;
   margin: 0;
   font-size: 94px;
-  line-height: 1.08;
+  line-height: 1.12;
   letter-spacing: 0;
+  overflow-wrap: anywhere;
 }
 
-.ticker {
-  position: absolute;
-  z-index: 15;
-  left: 0;
-  bottom: 28px;
-  width: 2600px;
-  color: rgba(255, 255, 255, 0.2);
-  font-size: 27px;
-  font-weight: 900;
-  letter-spacing: 0;
-  white-space: pre;
+/* —— Portrait / mobile 9:16 —— */
+.scene[data-aspect="portrait"] .header {
+  left: 36px;
+  right: 36px;
+  top: 48px;
+  grid-template-columns: 1fr 64px;
+  gap: 14px;
+  font-size: 18px;
+}
+
+.scene[data-aspect="portrait"] .header .progressTrack {
+  grid-column: 1 / -1;
+}
+
+.scene[data-aspect="portrait"] .coverMain {
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 36px;
+  padding: 120px 48px 24px;
+}
+
+.scene[data-aspect="portrait"] .coverBrandBlock {
+  max-width: 100%;
+}
+
+.scene[data-aspect="portrait"] .coverThemeSub {
+  font-size: 26px;
+}
+
+.scene[data-aspect="portrait"] .coverBadge {
+  align-self: flex-start;
+  max-width: 100%;
+}
+
+.scene[data-aspect="portrait"] .coverBackdropVeil {
+  background:
+    linear-gradient(
+      180deg,
+      rgba(0, 0, 0, 0.55) 0%,
+      rgba(0, 0, 0, 0.62) 45%,
+      rgba(0, 0, 0, 0.78) 100%
+    );
+}
+
+.scene[data-aspect="portrait"] .caseSceneLayout {
+  padding: 120px 36px 28px;
+  gap: 14px;
+}
+
+.scene[data-aspect="portrait"] .caseImageRegion {
+  flex: 1 1 72%;
+}
+
+.scene[data-aspect="portrait"] .imageStage--portrait .caseImage {
+  inset: 20px 10%;
+  width: calc(100% - 20%);
+  height: calc(100% - 40px);
+}
+
+.scene[data-aspect="portrait"] .imageStage--landscape .caseImage {
+  inset: 28px 24px;
+  width: calc(100% - 48px);
+  height: calc(100% - 56px);
+}
+
+.scene[data-aspect="portrait"] .caseMetaStrip {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  min-height: 0;
+}
+
+.scene[data-aspect="portrait"] .caseMetric {
+  max-width: 100%;
+  text-align: left;
+  font-size: 30px;
+}
+
+.scene[data-aspect="portrait"] .caseIdentity span {
+  width: 56px;
+  height: 56px;
+  font-size: 22px;
+}
+
+.scene[data-aspect="portrait"] .sceneSubtitleRegion {
+  margin: 0 20px 28px;
+  min-height: 100px;
+  max-height: 200px;
+  padding: 14px 20px;
+}
+
+.scene[data-aspect="portrait"] .sceneSubtitleText {
+  max-width: 920px;
+}
+
+.scene[data-aspect="portrait"] .closingScene {
+  padding: 120px 48px 24px;
+}
+
+.scene[data-aspect="portrait"] .closingScene h2 {
+  max-width: 100%;
+}
+
+.scene[data-aspect="portrait"] .closingScene p {
+  font-size: 26px;
+}
+
+.scene[data-aspect="portrait"] .fallbackPoster {
+  padding: 48px;
+}
+
+.scene[data-aspect="portrait"] .fallbackPoster span {
+  font-size: 64px;
+}
+
+.scene[data-aspect="portrait"] .fallbackPoster strong {
+  font-size: 48px;
+}
+
+.scene[data-aspect="portrait"] .fallbackPoster small {
+  font-size: 26px;
 }

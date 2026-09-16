@@ -63,6 +63,16 @@ For each job the system MUST run, in order unless a documented skip applies: AI 
 - **WHEN** `options.skip_ai_script` is true or every scene has explicit `旁白` fields
 - **THEN** the job proceeds to synthesis without requiring a successful Qwen call
 
+#### Scenario: Aspect defaults to landscape
+
+- **WHEN** a caller omits `options.aspect` or sends an unrecognized value
+- **THEN** the job renders the landscape composition (1920×1080)
+
+#### Scenario: Portrait aspect selects vertical composition
+
+- **WHEN** `options.aspect` is `portrait`
+- **THEN** the job renders the portrait composition (1080×1920)
+
 #### Scenario: Queued job waits for active render
 
 - **WHEN** a render is already in progress and a new job is created

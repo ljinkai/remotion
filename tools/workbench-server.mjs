@@ -10,6 +10,7 @@ import { synthesizeVideoProps } from "./synthesize-props.mjs";
 import { generateNarrationScript } from "./script-llm.mjs";
 import { createQueuedJob, publicJobView, readJob } from "./render-job-store.mjs";
 import { enqueueRenderJob } from "./render-job-worker.mjs";
+import { normalizeRenderJobOptions } from "./render-job-options.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 dotenv.config({ path: path.join(root, ".env") });
@@ -114,6 +115,116 @@ const renderWorkbenchHtml = () => `<!doctype html>
       }
       .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
       .stage { border-radius: 8px; overflow: hidden; background: #07090d; box-shadow: 0 18px 50px rgba(20, 29, 39, .18); }
+      .stage--portrait {
+        display: flex;
+        justify-content: center;
+        background: #0b0e14;
+        padding: 16px 0;
+      }
+      .formatGrid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+      }
+      .formatCard {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        border: 1px solid #dde3ea;
+        border-radius: 8px;
+        background: #fbfcfd;
+        color: #17202a;
+        text-align: left;
+      }
+      .formatCard.active {
+        border-color: #0f766e;
+        box-shadow: 0 0 0 2px rgba(15, 118, 110, .18);
+        background: #ecfdf8;
+      }
+      .formatIcon {
+        flex: 0 0 auto;
+        border-radius: 4px;
+        border: 2px solid #536170;
+        background: #e7ebef;
+      }
+      .formatIcon--landscape {
+        width: 36px;
+        height: 20px;
+      }
+      .formatIcon--portrait {
+        width: 18px;
+        height: 32px;
+      }
+      .formatCard.active .formatIcon {
+        border-color: #0f766e;
+        background: #99f6e4;
+      }
+      .templateBar {
+        margin-bottom: 14px;
+        padding: 12px;
+        border: 1px solid #dde3ea;
+        border-radius: 8px;
+        background: white;
+      }
+      .templateBarHead {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+      .templateBarHead strong { font-size: 13px; }
+      .templateGrid {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 8px;
+      }
+      .templateCard {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        align-items: stretch;
+        padding: 8px;
+        border: 1px solid #dde3ea;
+        border-radius: 8px;
+        background: #fbfcfd;
+        color: #17202a;
+        text-align: left;
+      }
+      .templateCard.active {
+        border-color: #0f766e;
+        box-shadow: 0 0 0 2px rgba(15, 118, 110, .18);
+        background: #ecfdf8;
+      }
+      .templateSwatch {
+        display: block;
+        height: 36px;
+        border-radius: 6px;
+        background: #111;
+      }
+      .templateSwatch[data-template="midnight"] {
+        background: linear-gradient(135deg, #07090d, #38d6c6 55%, #ff7b68);
+      }
+      .templateSwatch[data-template="noir"] {
+        background: linear-gradient(135deg, #050505, #e8c547 60%, #f5f5f5);
+      }
+      .templateSwatch[data-template="ocean"] {
+        background: linear-gradient(135deg, #061018, #5ec8ff 55%, #7ad7c5);
+      }
+      .templateSwatch[data-template="ember"] {
+        background: linear-gradient(135deg, #120a08, #ff8a5b 55%, #ffc857);
+      }
+      .templateSwatch[data-template="studio"] {
+        background: linear-gradient(135deg, #0e1116, #64d2ff 50%, #a78bfa);
+      }
+      .templateLabel {
+        font-size: 12px;
+        font-weight: 800;
+      }
+      @media (max-width: 1100px) {
+        .templateGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      }
       .summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 16px 0; }
       .stat { border-radius: 8px; background: white; border: 1px solid #dde3ea; padding: 12px; }
       .stat span { display: block; color: #687586; font-size: 12px; }
@@ -262,7 +373,7 @@ const renderWorkbenchHtml = () => `<!doctype html>
 </html>`;
 
 const getClientBundle = async () => {
-  if (clientBundle) {
+  if (clientBundle && process.env.NODE_ENV === "production") {
     return clientBundle;
   }
 
@@ -300,7 +411,12 @@ const renderVideo = async (props) => {
     .replace(/[-:.TZ]/g, "")
     .slice(0, 14);
   const propsPath = path.join(tmpDir, `props-${id}.json`);
-  const outputName = `markdown-video-${id}.mp4`;
+  const aspect = props?.aspect === "portrait" ? "portrait" : "landscape";
+  const compositionId =
+    aspect === "portrait"
+      ? "IndieWeeklyMarkdownPortrait"
+      : "IndieWeeklyMarkdown";
+  const outputName = `markdown-video-${aspect}-${id}.mp4`;
   const outputPath = path.join(outDir, outputName);
   await writeFile(propsPath, JSON.stringify(props, null, 2), "utf8");
 
@@ -308,7 +424,7 @@ const renderVideo = async (props) => {
   const args = [
     ...prefix,
     "render",
-    "IndieWeeklyMarkdown",
+    compositionId,
     outputPath,
     `--props=${propsPath}`,
   ];
@@ -482,14 +598,14 @@ const server = createServer(async (req, res) => {
             ? null
             : String(body.client_ref),
         callback_url: callbackUrl,
-        options:
-          body.options && typeof body.options === "object" ? body.options : {},
+        options: normalizeRenderJobOptions(body.options),
       });
       enqueueRenderJob(root, job.job_id);
       sendJson(res, 202, {
         job_id: job.job_id,
         status: job.status,
         client_ref: job.client_ref,
+        aspect: job.options?.aspect || "landscape",
       });
       return;
     }
