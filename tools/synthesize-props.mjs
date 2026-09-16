@@ -11,7 +11,9 @@ const synthId = () =>
 export const synthesizeVideoProps = async (props, { root }) => {
   const id = synthId();
   const workDir = path.join(root, ".workbench", `synth-${id}`);
-  const publicDir = path.join(root, "public", ".generated", `synth-${id}`);
+  // Use public/generated (no leading dot) so Remotion staticFile / public copy
+  // reliably picks up TTS assets during CLI render.
+  const publicDir = path.join(root, "public", "generated", `synth-${id}`);
   await mkdir(workDir, { recursive: true });
   await mkdir(publicDir, { recursive: true });
 
@@ -60,7 +62,7 @@ export const synthesizeVideoProps = async (props, { root }) => {
     if (result.audioPath) {
       await cp(workPath, publicPath);
     }
-    const relativePublicPath = `.generated/synth-${id}/${scene.filename}`;
+    const relativePublicPath = `generated/synth-${id}/${scene.filename}`;
     scene.apply(result, relativePublicPath);
   }
 

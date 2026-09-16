@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
 import esbuild from "esbuild";
 import { synthesizeVideoProps } from "./synthesize-props.mjs";
+import { embedLocalAudioAsDataUrls } from "./embed-audio-data-urls.mjs";
 import { generateNarrationScript } from "./script-llm.mjs";
 import { createQueuedJob, publicJobView, readJob } from "./render-job-store.mjs";
 import { enqueueRenderJob } from "./render-job-worker.mjs";
@@ -418,7 +419,8 @@ const renderVideo = async (props) => {
       : "IndieWeeklyMarkdown";
   const outputName = `markdown-video-${aspect}-${id}.mp4`;
   const outputPath = path.join(outDir, outputName);
-  await writeFile(propsPath, JSON.stringify(props, null, 2), "utf8");
+  const renderProps = await embedLocalAudioAsDataUrls(props, root);
+  await writeFile(propsPath, JSON.stringify(renderProps, null, 2), "utf8");
 
   const { command, prefix } = localRemotionCommand();
   const args = [
@@ -427,6 +429,7 @@ const renderVideo = async (props) => {
     compositionId,
     outputPath,
     `--props=${propsPath}`,
+    "--public-dir=public",
   ];
 
   await new Promise((resolve, reject) => {

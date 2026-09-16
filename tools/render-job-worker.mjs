@@ -4,6 +4,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { generateNarrationScript } from "./script-llm.mjs";
 import { synthesizeVideoProps } from "./synthesize-props.mjs";
+import { embedLocalAudioAsDataUrls } from "./embed-audio-data-urls.mjs";
 import { loadMarkdownRuntime } from "./markdown-runtime.mjs";
 import { uploadFileToQiniu, getQiniuConfig } from "./qiniu-upload.mjs";
 import {
@@ -107,7 +108,13 @@ const renderToPath = async (root, props, outputPath, propsPath) => {
   await new Promise((resolve, reject) => {
     const proc = spawn(
       command,
-      ["render", compositionId, outputPath, `--props=${propsPath}`],
+      [
+        "render",
+        compositionId,
+        outputPath,
+        `--props=${propsPath}`,
+        "--public-dir=public",
+      ],
       { cwd: root, stdio: ["ignore", "pipe", "pipe"] },
     );
     let stderr = "";
@@ -223,7 +230,8 @@ const runOneJob = async (root, jobId) => {
     await updateJob(root, jobId, { status: "rendering" });
     const outputPath = path.join(workDir, "out.mp4");
     const propsPath = path.join(workDir, "render-props.json");
-    await renderToPath(root, enriched, outputPath, propsPath);
+    const renderProps = await embedLocalAudioAsDataUrls(enriched, root);
+    await renderToPath(root, renderProps, outputPath, propsPath);
 
     await updateJob(root, jobId, { status: "uploading" });
     const { keyPrefix } = getQiniuConfig();
