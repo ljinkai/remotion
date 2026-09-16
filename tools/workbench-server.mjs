@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
 import esbuild from "esbuild";
 import { synthesizeVideoProps } from "./synthesize-props.mjs";
+import { generateNarrationScript } from "./script-llm.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 dotenv.config({ path: path.join(root, ".env") });
@@ -91,6 +92,39 @@ const renderWorkbenchHtml = () => `<!doctype html>
       .stat strong { display: block; margin-top: 4px; font-size: 18px; }
       .status { min-height: 24px; margin-top: 10px; color: #536170; font-size: 13px; }
       .status.error { color: #b42318; }
+      .scriptPanel {
+        margin-top: 12px;
+        border: 1px solid #dde3ea;
+        border-radius: 8px;
+        background: #fbfcfd;
+        padding: 12px;
+      }
+      .scriptPanel h3 {
+        margin: 0 0 8px;
+        font-size: 14px;
+      }
+      .scriptField {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        margin-bottom: 10px;
+      }
+      .scriptField label {
+        font-size: 12px;
+        font-weight: 700;
+        color: #536170;
+      }
+      .scriptField textarea {
+        width: 100%;
+        min-height: 64px;
+        height: auto;
+        resize: vertical;
+        border: 1px solid #cdd5df;
+        border-radius: 8px;
+        padding: 10px;
+        background: white;
+        line-height: 1.45;
+      }
       .cueTimeline {
         margin-top: 16px;
         border: 1px solid #dde3ea;
@@ -348,6 +382,21 @@ const server = createServer(async (req, res) => {
       createReadStream(path.join(outDir, name))
         .on("error", () => send(res, 404, "Not found"))
         .pipe(res);
+      return;
+    }
+
+    if (req.method === "POST" && pathname === "/api/script") {
+      const body = await readJson(req);
+      if (!body.props || typeof body.props !== "object") {
+        sendJson(res, 400, { error: "缺少 props" });
+        return;
+      }
+      if (!Array.isArray(body.props.cases) || body.props.cases.length === 0) {
+        sendJson(res, 400, { error: "props.cases 不能为空" });
+        return;
+      }
+      const script = await generateNarrationScript(body.props);
+      sendJson(res, 200, { script });
       return;
     }
 

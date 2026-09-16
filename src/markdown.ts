@@ -4,6 +4,7 @@ import {
   type WeeklyCase,
   type WeeklyVideoProps,
 } from "./videoData";
+import type { NarrationScript } from "./narrationScript";
 
 export const sampleMarkdown = `---
 issue: 156
@@ -170,7 +171,7 @@ const bodyText = (lines: string[]) =>
     .filter((line) => !line.startsWith("!"))
     .filter(
       (line) =>
-        !/^[-*]?\s*(作者|author|日期|date|指标|metric|图片|image|img|标签|fallback)\s*[:：]/i.test(
+        !/^[-*]?\s*(作者|author|日期|date|指标|metric|图片|image|img|标签|fallback|副标题|subtitle|旁白|narration)\s*[:：]/i.test(
           line,
         ),
     )
@@ -226,6 +227,10 @@ export const parseMarkdownToVideo = (markdown: string): WeeklyVideoProps => {
     const text = bodyText(section.body);
     const title = section.title || `条目 ${index + 1}`;
     const fallback = fieldValue(section.body, ["标签", "fallback"]) || title;
+    const narration =
+      fieldValue(section.body, ["旁白", "narration"]) ||
+      fieldValue(section.body, ["副标题", "subtitle"]) ||
+      firstSentence(text, title);
 
     return {
       index: String(index + 1).padStart(2, "0"),
@@ -235,9 +240,7 @@ export const parseMarkdownToVideo = (markdown: string): WeeklyVideoProps => {
       metric: fieldValue(section.body, ["指标", "metric"]) || "精选",
       image: firstImage(section.body),
       fallback,
-      subtitle:
-        fieldValue(section.body, ["副标题", "subtitle"]) ||
-        firstSentence(text, title),
+      subtitle: narration,
       color: CASE_COLORS[index % CASE_COLORS.length],
     };
   });
@@ -245,9 +248,18 @@ export const parseMarkdownToVideo = (markdown: string): WeeklyVideoProps => {
   const title = h1 || defaultVideoProps.headerTitle;
   const coverTitle = parseCoverTitle(title, meta);
   const introText = bodyText(intro);
-  const closingText = closing
-    ? firstSentence(bodyText(closing.body), defaultVideoProps.closingSubtitle)
-    : defaultVideoProps.closingSubtitle;
+  const introNarration =
+    fieldValue(intro, ["旁白", "narration"]) ||
+    firstSentence(
+      introText,
+      `这期${defaultVideoProps.headerTitle}，主线是${coverTitle}。`,
+    );
+  const closingBody = closing ? closing.body : [];
+  const closingNarration =
+    fieldValue(closingBody, ["旁白", "narration"]) ||
+    (closing
+      ? firstSentence(bodyText(closingBody), defaultVideoProps.closingSubtitle)
+      : defaultVideoProps.closingSubtitle);
 
   return {
     issueNumber: parseIssueNumber(title, meta),
@@ -260,14 +272,55 @@ export const parseMarkdownToVideo = (markdown: string): WeeklyVideoProps => {
       meta.badge ||
       cases.find((item) => item.metric !== "精选")?.metric ||
       defaultVideoProps.coverBadge,
-    introSubtitle: firstSentence(
-      introText,
-      `这期${defaultVideoProps.headerTitle}，主线是${coverTitle}。`,
-    ),
+    introSubtitle: introNarration,
     closingTitle: closing?.title || defaultVideoProps.closingTitle,
-    closingSubtitle: closingText,
+    closingSubtitle: closingNarration,
     ticker: meta.ticker || defaultVideoProps.ticker,
     audioSrc: meta.audio || "",
     cases: cases.length > 0 ? cases : defaultVideoProps.cases,
+  };
+};
+
+/** Build a narration script only from explicit 旁白/narration fields. */
+export const tryBuildScriptFromMarkdown = (
+  markdown: string,
+): NarrationScript | null => {
+  const source = markdown.trim();
+  if (!source) {
+    return null;
+  }
+  const { body } = parseFrontmatter(source);
+  const { intro, sections } = splitSections(body);
+  const contentSections = sections.filter(
+    (section) => !isClosingSection(section.title),
+  );
+  const closing = sections.find((section) => isClosingSection(section.title));
+
+  const introNarration = fieldValue(intro, ["旁白", "narration"]);
+  const closingNarration = closing
+    ? fieldValue(closing.body, ["旁白", "narration"])
+    : "";
+  if (!introNarration || !closingNarration || contentSections.length === 0) {
+    return null;
+  }
+
+  const cases = contentSections.map((section, index) => {
+    const narration = fieldValue(section.body, ["旁白", "narration"]);
+    return {
+      index: String(index + 1).padStart(2, "0"),
+      title: section.title || `条目 ${index + 1}`,
+      narration,
+    };
+  });
+
+  if (cases.some((item) => !item.narration)) {
+    return null;
+  }
+
+  return {
+    intro: introNarration,
+    cases,
+    closing: closingNarration,
+    source: "markdown",
   };
 };

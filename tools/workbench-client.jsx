@@ -2,9 +2,17 @@ import { Player } from "@remotion/player";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { MyComponent } from "../src/Composition";
-import { CueTimelinePanel } from "./cue-timeline-panel";
-import { parseMarkdownToVideo, sampleMarkdown } from "../src/markdown";
+import {
+  parseMarkdownToVideo,
+  sampleMarkdown,
+  tryBuildScriptFromMarkdown,
+} from "../src/markdown";
+import {
+  applyNarrationScript,
+  scriptIsComplete,
+} from "../src/narrationScript";
 import { getDurationInFrames } from "../src/videoData";
+import { CueTimelinePanel } from "./cue-timeline-panel";
 
 const savedMarkdown =
   localStorage.getItem("remotion-markdown") || sampleMarkdown;
@@ -14,8 +22,10 @@ function App() {
   const [markdown, setMarkdown] = useState(savedMarkdown);
   const [rendering, setRendering] = useState(false);
   const [synthesizing, setSynthesizing] = useState(false);
+  const [scripting, setScripting] = useState(false);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
+  const [script, setScript] = useState(null);
   const [synthesizedProps, setSynthesizedProps] = useState(null);
   const [currentFrame, setCurrentFrame] = useState(0);
 
@@ -23,9 +33,14 @@ function App() {
     () => parseMarkdownToVideo(markdown),
     [markdown],
   );
-  const props = synthesizedProps ?? parsedProps;
+  const scriptedProps = useMemo(
+    () => (script ? applyNarrationScript(parsedProps, script) : parsedProps),
+    [parsedProps, script],
+  );
+  const props = synthesizedProps ?? scriptedProps;
   const durationInFrames = useMemo(() => getDurationInFrames(props), [props]);
   const hasVoice = props.useSynthesizedTimeline === true;
+  const hasScript = scriptIsComplete(script);
 
   useEffect(() => {
     const player = playerRef.current;
@@ -44,6 +59,7 @@ function App() {
   const updateMarkdown = (next) => {
     setMarkdown(next);
     localStorage.setItem("remotion-markdown", next);
+    setScript(null);
     setSynthesizedProps(null);
     setCurrentFrame(0);
     setError("");
@@ -57,15 +73,78 @@ function App() {
     updateMarkdown(await file.text());
   };
 
+  const updateScriptField = (patch) => {
+    setScript((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      return { ...prev, ...patch, source: "manual" };
+    });
+    setSynthesizedProps(null);
+  };
+
+  const updateCaseNarration = (index, narration) => {
+    setScript((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      return {
+        ...prev,
+        source: "manual",
+        cases: prev.cases.map((item) =>
+          item.index === index ? { ...item, narration } : item,
+        ),
+      };
+    });
+    setSynthesizedProps(null);
+  };
+
+  const generateScript = async () => {
+    setScripting(true);
+    setError("");
+    setStatus("正在生成逐字稿...");
+    try {
+      const fromMarkdown = tryBuildScriptFromMarkdown(markdown);
+      if (fromMarkdown) {
+        setScript(fromMarkdown);
+        setSynthesizedProps(null);
+        setStatus("已从 Markdown 旁白字段载入逐字稿（未调用千问）");
+        return;
+      }
+
+      const response = await fetch("/api/script", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ props: parsedProps }),
+      });
+      const body = await response.json();
+      if (!response.ok) {
+        throw new Error(body.error || "生成逐字稿失败");
+      }
+      setScript(body.script);
+      setSynthesizedProps(null);
+      setStatus("千问逐字稿已生成，可编辑后再合成语音");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setStatus("");
+    } finally {
+      setScripting(false);
+    }
+  };
+
   const synthesizeSpeech = async () => {
     setSynthesizing(true);
     setError("");
-    setStatus("正在合成语音...");
+    setStatus(
+      hasScript
+        ? "正在按逐字稿合成语音..."
+        : "正在合成语音（未生成逐字稿，使用 MD 短句）...",
+    );
     try {
       const response = await fetch("/api/synthesize", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ props: parsedProps }),
+        body: JSON.stringify({ props: scriptedProps }),
       });
       const body = await response.json();
       if (!response.ok) {
@@ -112,7 +191,7 @@ function App() {
     setCurrentFrame(frame);
   };
 
-  const busy = rendering || synthesizing;
+  const busy = rendering || synthesizing || scripting;
 
   return (
     <main className="shell">
@@ -120,7 +199,7 @@ function App() {
         <div className="brand">
           <div>
             <h1>Markdown 视频工作台</h1>
-            <p className="meta">IndieWeeklyMarkdown · Azure Speech</p>
+            <p className="meta">千问逐字稿 · Azure Speech</p>
           </div>
           <label>
             <input
@@ -145,6 +224,14 @@ function App() {
           <button
             className="secondary"
             type="button"
+            onClick={generateScript}
+            disabled={busy}
+          >
+            {scripting ? "生成中" : "生成逐字稿"}
+          </button>
+          <button
+            className="secondary"
+            type="button"
             onClick={synthesizeSpeech}
             disabled={busy}
           >
@@ -162,10 +249,50 @@ function App() {
         <div className={`status${error ? " error" : ""}`}>
           {error || status}
         </div>
-        {!hasVoice ? (
+        {!hasScript ? (
           <p className="meta">
-            建议先点「合成语音」，再预览音字同步效果并生成 MP4。
+            建议先点「生成逐字稿」（千问），编辑口播后再「合成语音」。
           </p>
+        ) : null}
+
+        {script ? (
+          <section className="scriptPanel">
+            <h3>
+              逐字稿
+              <span className="meta"> · {script.source}</span>
+            </h3>
+            <div className="scriptField">
+              <label>封面 / 导语</label>
+              <textarea
+                value={script.intro}
+                onChange={(event) =>
+                  updateScriptField({ intro: event.target.value })
+                }
+              />
+            </div>
+            {script.cases.map((item) => (
+              <div className="scriptField" key={item.index}>
+                <label>
+                  案例 {item.index} · {item.title}
+                </label>
+                <textarea
+                  value={item.narration}
+                  onChange={(event) =>
+                    updateCaseNarration(item.index, event.target.value)
+                  }
+                />
+              </div>
+            ))}
+            <div className="scriptField">
+              <label>结尾</label>
+              <textarea
+                value={script.closing}
+                onChange={(event) =>
+                  updateScriptField({ closing: event.target.value })
+                }
+              />
+            </div>
+          </section>
         ) : null}
       </section>
 
@@ -209,7 +336,8 @@ function App() {
           onSeek={seekToCue}
         />
         <p className="meta">
-          语音状态：<code>{hasVoice ? "已合成" : "未合成"}</code> · 输出目录：
+          逐字稿：<code>{hasScript ? script.source : "未生成"}</code> · 语音：
+          <code>{hasVoice ? "已合成" : "未合成"}</code> · 输出：
           <code>out/</code>
         </p>
       </section>

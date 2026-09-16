@@ -43,16 +43,18 @@ Operators edit Markdown in a local Workbench, preview with `@remotion/player`, t
 ## Domain Context
 
 - Target format: 独立开发变现周刊 — cover, N case scenes, closing
-- Case narration comes from Markdown section body / 副标题 fields
+- Weekly Markdown drives visuals (images, titles, metrics)
+- Spoken narration SHOULD come from an AI-optimized, editable 逐字稿 (then Azure TTS), not raw first sentences
 - Images: `public/` paths or remote `https://` URLs
 
 ## Important Constraints
 
 - Remotion 4.0.523 local MP4 composition on macOS needs macOS 15+; Linux/Docker is the reliable render path
-- Do not commit Azure keys or generated speech dumps with secrets
-- Generated audio under `.workbench/` / `out/` stays gitignored
+- Do not commit Azure keys, LLM keys, or generated speech dumps with secrets
+- Generated audio under `.workbench/` / `out/` / `public/.generated` stays gitignored
 
 ## External Dependencies
 
 - Azure AI Speech (TTS + WordBoundary / SentenceBoundary timing)
+- OpenAI-compatible Chat Completions for 逐字稿 rewrite — **default: 通义千问 / DashScope** (`SCRIPT_LLM_*`, fallback `QWEN_API_KEY`, model `qwen-plus`)
 - Optional: Zeabur for hosted Workbench rendering

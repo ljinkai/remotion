@@ -9,29 +9,43 @@ npm install
 npm run workbench
 ```
 
-Open the printed local URL, paste or import a Markdown file, preview it, synthesize speech, then click `生成 MP4`.
+Open the printed local URL, paste or import a Markdown file, then:
+
+1. **生成逐字稿**（通义千问）→ edit spoken lines
+2. **合成语音**（Azure Speech）→ preview synced subtitles
+3. **生成 MP4**
+
 Rendered videos are written to `out/`.
 
-### Azure Speech (recommended)
+### Azure Speech + 通义千问
 
-Copy `.env.example` to `.env` (or edit the existing `.env`) and fill in your Azure Speech key and region. The workbench loads `.env` automatically on start.
+Copy `.env.example` to `.env` (or edit the existing `.env`). The workbench loads `.env` automatically on start.
 
 ```console
 cp .env.example .env
-# edit .env — set AZURE_SPEECH_KEY and AZURE_SPEECH_REGION
+# edit .env:
+#   AZURE_SPEECH_KEY / AZURE_SPEECH_REGION
+#   SCRIPT_LLM_API_KEY 或 QWEN_API_KEY（千问）
+#   SCRIPT_LLM_MODEL=qwen-plus（默认）
 npm run workbench
 ```
 
-You can still use shell exports instead; they override `.env` values.
+Defaults for script LLM:
+
+- Base URL: `https://dashscope-intl.aliyuncs.com/compatible-mode/v1`
+- Model: `qwen-plus`
+
+China DashScope account: set `SCRIPT_LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1`.
 
 Workflow:
 
-1. Edit or import Markdown
-2. Click **合成语音** — Azure TTS generates per-scene audio + timed subtitle cues
-3. Preview the synced image-above-subtitle layout in the player
-4. Click **生成 MP4**
+1. Edit or import weekly Markdown (visual structure)
+2. Click **生成逐字稿** — Qwen rewrites spoken narration (or loads MD `旁白:` fields if all present)
+3. Edit the script panel if needed
+4. Click **合成语音** — Azure TTS + timed cues from the script
+5. Preview cue timeline / player, then **生成 MP4**
 
-Synthesized audio is written to `public/.generated/` (gitignored). Without Azure credentials, preview still works on the legacy fixed timeline; MP4 render uses that timeline too.
+Synthesized audio is written to `public/.generated/` (gitignored). Without Azure credentials, preview still works on the legacy fixed timeline; MP4 render uses that timeline too. Without Qwen credentials, you can still hand-write `旁白:` in Markdown or skip AI and synthesize short MD-derived lines.
 
 Recommended runtime: Node 20+.
 
@@ -116,5 +130,6 @@ Supported item fields:
 - `图片` / `image`
 - `标签` / `fallback`
 - `副标题` / `subtitle`
+- `旁白` / `narration`（口播逐字稿；导语/案例/结尾都可写。全部写齐后点「生成逐字稿」会直接载入，不调用千问）
 
 Images can be files under `public/` such as `case-images/example.png`, or remote `https://` URLs.
