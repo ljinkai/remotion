@@ -1,6 +1,7 @@
 # Remotion Markdown Video
 
 Interactive Remotion workbench for turning a weekly Markdown document into a video.
+Also exposes an authenticated **render service API** for VidFlow (async jobs + webhook).
 
 ## Commands
 
@@ -27,6 +28,8 @@ cp .env.example .env
 #   AZURE_SPEECH_KEY / AZURE_SPEECH_REGION
 #   SCRIPT_LLM_API_KEY 或 QWEN_API_KEY（千问）
 #   SCRIPT_LLM_MODEL=qwen-plus（默认）
+#   RENDER_API_KEY（服务 API）
+#   QINIU_*（服务模式上传）
 npm run workbench
 ```
 
@@ -65,6 +68,33 @@ Manual rendering still works too:
 npx remotion render IndieWeeklyMarkdown out/video.mp4 --props=props.json
 ```
 
+## Render service API (`/api/v1`)
+
+For VidFlow / server-to-server integration (not the Workbench UI):
+
+| Method | Path | Auth | Notes |
+|--------|------|------|-------|
+| `GET` | `/api/v1/health` | no | Probe |
+| `POST` | `/api/v1/render-jobs` | Bearer / `X-Api-Key` | Create job; **requires** `callback_url` |
+| `GET` | `/api/v1/render-jobs/:id` | Bearer / `X-Api-Key` | Ops only — do not poll as primary path |
+
+Create body:
+
+```json
+{
+  "markdown": "---\\nissue: 156\\n...",
+  "client_ref": "vidflow-issue-uuid",
+  "callback_url": "https://vidflow.example/api/hooks/remotion/video-jobs",
+  "options": { "skip_ai_script": false, "voice": "zh-CN-YunxiNeural" }
+}
+```
+
+Pipeline: Markdown → Qwen script (unless skip / full `旁白`) → Azure TTS → Remotion MP4 → Qiniu → **POST webhook**.
+
+Webhook headers: `X-Remotion-Signature: sha256=<hmac>` (HMAC-SHA256 of raw body with `RENDER_WEBHOOK_SECRET` or `RENDER_API_KEY`), `X-Remotion-Job-Id`.
+
+Required env for service mode: `RENDER_API_KEY`, Azure Speech, Qwen (unless skip), `QINIU_*`.
+
 ## Deploy to Zeabur (Docker)
 
 This repo includes a Remotion-ready `Dockerfile` for Linux rendering (recommended over macOS versions older than 15).
@@ -72,7 +102,8 @@ This repo includes a Remotion-ready `Dockerfile` for Linux rendering (recommende
 1. Push the repo to GitHub.
 2. In Zeabur, create a service from the repo (Dockerfile will be auto-detected).
 3. Give the service enough resources for rendering (recommend **≥ 2 GB memory**, ideally 4 GB).
-4. Deploy. Zeabur injects `PORT`; the workbench listens on `0.0.0.0`.
+4. Set env: `RENDER_API_KEY`, `AZURE_SPEECH_*`, `SCRIPT_LLM_*` / `QWEN_API_KEY`, `QINIU_*`.
+5. Deploy. Zeabur injects `PORT`; the workbench + API listen on `0.0.0.0`.
 
 Local Docker check:
 
@@ -81,16 +112,21 @@ docker build -t remotion-workbench .
 docker run --rm -p 8080:8080 \
   -e AZURE_SPEECH_KEY=your-key \
   -e AZURE_SPEECH_REGION=eastasia \
+  -e RENDER_API_KEY=dev-secret \
+  -e QINIU_ACCESS_KEY=... \
+  -e QINIU_SECRET_KEY=... \
+  -e QINIU_BUCKET=... \
+  -e QINIU_CDN_DOMAIN=... \
   remotion-workbench
 ```
 
-Then open `http://localhost:8080`.
+Then open `http://localhost:8080` (Workbench) or call `GET /api/v1/health`.
 
 Notes:
 
 - Chrome Headless Shell is baked into the image at build time (`npx remotion browser ensure`).
-- Rendered MP4s live under `/app/out` inside the container and are served at `/renders/...`. Without a persistent volume they are lost on redeploy.
-- Concurrent renders are CPU/memory heavy; start with one user / one render at a time.
+- Rendered MP4s live under `/app/out` and job artifacts under `/app/.workbench/jobs`. Without a persistent volume they are lost on redeploy.
+- Concurrent renders are CPU/memory heavy; v1 processes **one render job at a time** (global serial queue).
 
 ## Markdown Shape
 

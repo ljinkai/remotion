@@ -57,4 +57,6 @@ Operators edit Markdown in a local Workbench, preview with `@remotion/player`, t
 
 - Azure AI Speech (TTS + WordBoundary / SentenceBoundary timing)
 - OpenAI-compatible Chat Completions for 逐字稿 rewrite — **default: 通义千问 / DashScope** (`SCRIPT_LLM_*`, fallback `QWEN_API_KEY`, model `qwen-plus`)
-- Optional: Zeabur for hosted Workbench rendering
+- Qiniu object storage + CDN for service-mode MP4 upload (`QINIU_*`)
+- Optional: Zeabur for hosted Workbench / render service
+- Downstream consumer: VidFlow weekly video orchestration via `/api/v1/render-jobs`

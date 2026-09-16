@@ -8,6 +8,8 @@ import dotenv from "dotenv";
 import esbuild from "esbuild";
 import { synthesizeVideoProps } from "./synthesize-props.mjs";
 import { generateNarrationScript } from "./script-llm.mjs";
+import { createQueuedJob, publicJobView, readJob } from "./render-job-store.mjs";
+import { enqueueRenderJob } from "./render-job-worker.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 dotenv.config({ path: path.join(root, ".env") });
@@ -17,6 +19,32 @@ const port = Number(process.env.PORT || 5177);
 const host = process.env.HOST || "0.0.0.0";
 
 let clientBundle = null;
+
+const DEFAULT_RENDER_API_KEY = "vidflow-remotion-shared-key-2026";
+
+const getConfiguredApiKey = () =>
+  process.env.RENDER_API_KEY?.trim() || DEFAULT_RENDER_API_KEY;
+
+const extractApiKey = (req) => {
+  const headerKey = req.headers["x-api-key"];
+  if (typeof headerKey === "string" && headerKey.trim()) {
+    return headerKey.trim();
+  }
+  const auth = req.headers.authorization;
+  if (typeof auth === "string" && auth.toLowerCase().startsWith("bearer ")) {
+    return auth.slice(7).trim();
+  }
+  return "";
+};
+
+const requireApiKey = (req, res) => {
+  const expected = getConfiguredApiKey();
+  if (extractApiKey(req) !== expected) {
+    sendJson(res, 401, { error: "Unauthorized" });
+    return false;
+  }
+  return true;
+};
 
 const send = (res, status, body, headers = {}) => {
   res.writeHead(status, headers);
@@ -415,6 +443,68 @@ const server = createServer(async (req, res) => {
       const body = await readJson(req);
       const result = await renderVideo(body.props);
       sendJson(res, 200, result);
+      return;
+    }
+
+    if (req.method === "GET" && pathname === "/api/v1/health") {
+      sendJson(res, 200, { status: "ok" });
+      return;
+    }
+
+    if (req.method === "POST" && pathname === "/api/v1/render-jobs") {
+      if (!requireApiKey(req, res)) {
+        return;
+      }
+      const body = await readJson(req);
+      const markdown =
+        typeof body.markdown === "string" ? body.markdown.trim() : "";
+      const callbackUrl =
+        typeof body.callback_url === "string" ? body.callback_url.trim() : "";
+      if (!markdown) {
+        sendJson(res, 400, { error: "markdown 必填" });
+        return;
+      }
+      if (!callbackUrl) {
+        sendJson(res, 400, { error: "callback_url 必填" });
+        return;
+      }
+      try {
+        // eslint-disable-next-line no-new
+        new URL(callbackUrl);
+      } catch {
+        sendJson(res, 400, { error: "callback_url 非法" });
+        return;
+      }
+      const job = await createQueuedJob(root, {
+        markdown,
+        client_ref:
+          body.client_ref === undefined || body.client_ref === null
+            ? null
+            : String(body.client_ref),
+        callback_url: callbackUrl,
+        options:
+          body.options && typeof body.options === "object" ? body.options : {},
+      });
+      enqueueRenderJob(root, job.job_id);
+      sendJson(res, 202, {
+        job_id: job.job_id,
+        status: job.status,
+        client_ref: job.client_ref,
+      });
+      return;
+    }
+
+    const jobMatch = pathname.match(/^\/api\/v1\/render-jobs\/([^/]+)$/);
+    if (req.method === "GET" && jobMatch) {
+      if (!requireApiKey(req, res)) {
+        return;
+      }
+      const job = await readJob(root, decodeURIComponent(jobMatch[1]));
+      if (!job) {
+        sendJson(res, 404, { error: "Job not found" });
+        return;
+      }
+      sendJson(res, 200, publicJobView(job));
       return;
     }
 
