@@ -58,11 +58,19 @@ body {
   background: linear-gradient(90deg, #38d6c6, #f6c95f, #ff7b68, #7aa7ff);
 }
 
-.coverScene,
-.caseScene,
-.closingScene {
-  position: absolute;
+.coverSceneLayout,
+.caseSceneLayout,
+.closingSceneLayout {
+  display: flex;
+  flex-direction: column;
   inset: 0;
+}
+
+.coverScene,
+.closingScene {
+  position: relative;
+  flex: 1;
+  min-height: 0;
 }
 
 .coverScene {
@@ -106,12 +114,20 @@ body {
   font-weight: 950;
 }
 
+.caseSceneLayout {
+  padding: 96px 72px 72px;
+  gap: 18px;
+}
+
+.caseImageRegion {
+  flex: 1 1 68%;
+  min-height: 0;
+}
+
 .imageStage {
-  position: absolute;
-  left: 72px;
-  right: 72px;
-  top: 96px;
-  height: 760px;
+  position: relative;
+  width: 100%;
+  height: 100%;
   overflow: hidden;
   border-radius: 8px;
   background: #10141d;
@@ -132,10 +148,10 @@ body {
 
 .caseImage {
   position: absolute;
-  inset: 28px 0 96px;
+  inset: 24px;
   z-index: 3;
-  width: 100%;
-  height: calc(100% - 124px);
+  width: calc(100% - 48px);
+  height: calc(100% - 48px);
   object-fit: contain;
   object-position: center;
 }
@@ -175,25 +191,12 @@ body {
   font-weight: 850;
 }
 
-.imageOverlay {
-  position: absolute;
-  inset: 0;
-  z-index: 4;
-  background:
-    linear-gradient(180deg, rgba(0, 0, 0, 0.08), transparent 42%, rgba(0, 0, 0, 0.78)),
-    linear-gradient(90deg, rgba(0, 0, 0, 0.16), transparent 46%);
-}
-
-.caseCaption {
-  position: absolute;
-  z-index: 5;
-  left: 104px;
-  right: 104px;
-  top: 730px;
+.caseMetaStrip {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   gap: 42px;
+  padding: 0 8px;
 }
 
 .caseIdentity {
@@ -227,31 +230,39 @@ body {
   font-weight: 780;
 }
 
-.caseCaption > strong {
-  font-size: 58px;
+.caseMetaStrip > strong {
+  font-size: 42px;
   font-weight: 950;
   line-height: 1;
   text-align: right;
 }
 
-.subtitleBar {
-  position: absolute;
-  z-index: 30;
-  left: 184px;
-  right: 184px;
-  bottom: 88px;
-  min-height: 82px;
+.caseIdentity h2 {
+  font-size: 42px;
+}
+
+.caseIdentity p {
+  font-size: 22px;
+}
+
+.sceneSubtitleRegion {
+  flex: 0 0 auto;
+  min-height: 120px;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 18px 40px;
+  padding: 18px 32px;
   border-radius: 8px;
   background: rgba(0, 0, 0, 0.76);
   box-shadow: 0 18px 54px rgba(0, 0, 0, 0.38);
+}
+
+.sceneSubtitleText {
+  margin: 0;
   color: #ffffff;
-  font-size: 36px;
+  font-size: 34px;
   font-weight: 900;
-  line-height: 1.22;
+  line-height: 1.28;
   text-align: center;
 }
 
@@ -259,7 +270,12 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding: 0 128px 80px;
+  padding: 0 128px 24px;
+}
+
+.coverSceneLayout .sceneSubtitleRegion,
+.closingSceneLayout .sceneSubtitleRegion {
+  margin: 0 72px 72px;
 }
 
 .closingScene h2 {

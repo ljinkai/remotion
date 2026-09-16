@@ -4,9 +4,12 @@ import { createReadStream } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import dotenv from "dotenv";
 import esbuild from "esbuild";
+import { synthesizeVideoProps } from "./synthesize-props.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+dotenv.config({ path: path.join(root, ".env") });
 const outDir = path.join(root, "out");
 const tmpDir = path.join(root, ".workbench");
 const port = Number(process.env.PORT || 5177);
@@ -88,11 +91,105 @@ const renderWorkbenchHtml = () => `<!doctype html>
       .stat strong { display: block; margin-top: 4px; font-size: 18px; }
       .status { min-height: 24px; margin-top: 10px; color: #536170; font-size: 13px; }
       .status.error { color: #b42318; }
+      .cueTimeline {
+        margin-top: 16px;
+        border: 1px solid #dde3ea;
+        border-radius: 8px;
+        background: white;
+        overflow: hidden;
+      }
+      .cueTimelineHeader {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: center;
+        padding: 12px 14px;
+        border-bottom: 1px solid #eef2f6;
+        background: #fbfcfd;
+      }
+      .cueTimeline h3 {
+        margin: 0;
+        font-size: 14px;
+      }
+      .cueTimelineNow {
+        color: #0f766e;
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .cueTimelineBody {
+        max-height: 320px;
+        overflow: auto;
+        padding: 8px 10px 12px;
+      }
+      .cueTimelineEmpty {
+        margin: 0;
+        padding: 14px;
+        color: #687586;
+        font-size: 13px;
+      }
+      .cueSceneGroup + .cueSceneGroup {
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid #eef2f6;
+      }
+      .cueSceneGroup h4 {
+        margin: 0 0 8px;
+        color: #536170;
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: .02em;
+        text-transform: uppercase;
+      }
+      .cueSceneGroup ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .cueRow {
+        width: 100%;
+        display: grid;
+        grid-template-columns: 180px minmax(0, 1fr);
+        gap: 12px;
+        align-items: start;
+        margin: 0 0 6px;
+        padding: 10px 12px;
+        border: 1px solid #e7ebef;
+        border-radius: 8px;
+        background: #fff;
+        color: #17202a;
+        text-align: left;
+        cursor: pointer;
+      }
+      .cueRow:hover { background: #f7fafc; }
+      .cueRow.active {
+        border-color: #0f766e;
+        background: #ecfdf8;
+        box-shadow: inset 0 0 0 1px rgba(15, 118, 110, .08);
+      }
+      .cueTime {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        font-size: 12px;
+        font-weight: 800;
+        color: #334155;
+        font-variant-numeric: tabular-nums;
+      }
+      .cueTime small {
+        font-size: 11px;
+        font-weight: 600;
+        color: #687586;
+      }
+      .cueText {
+        font-size: 13px;
+        line-height: 1.45;
+      }
       @media (max-width: 980px) {
         .shell { grid-template-columns: 1fr; }
         .panel { border-right: 0; border-bottom: 1px solid #dde3ea; }
         textarea { height: 360px; min-height: 320px; }
         .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .cueRow { grid-template-columns: 1fr; }
       }
     </style>
   </head>
@@ -251,6 +348,17 @@ const server = createServer(async (req, res) => {
       createReadStream(path.join(outDir, name))
         .on("error", () => send(res, 404, "Not found"))
         .pipe(res);
+      return;
+    }
+
+    if (req.method === "POST" && pathname === "/api/synthesize") {
+      const body = await readJson(req);
+      if (!body.props || typeof body.props !== "object") {
+        sendJson(res, 400, { error: "缺少 props" });
+        return;
+      }
+      const result = await synthesizeVideoProps(body.props, { root });
+      sendJson(res, 200, result);
       return;
     }
 

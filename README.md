@@ -9,8 +9,29 @@ npm install
 npm run workbench
 ```
 
-Open the printed local URL, paste or import a Markdown file, preview it, then click `生成 MP4`.
+Open the printed local URL, paste or import a Markdown file, preview it, synthesize speech, then click `生成 MP4`.
 Rendered videos are written to `out/`.
+
+### Azure Speech (recommended)
+
+Copy `.env.example` to `.env` (or edit the existing `.env`) and fill in your Azure Speech key and region. The workbench loads `.env` automatically on start.
+
+```console
+cp .env.example .env
+# edit .env — set AZURE_SPEECH_KEY and AZURE_SPEECH_REGION
+npm run workbench
+```
+
+You can still use shell exports instead; they override `.env` values.
+
+Workflow:
+
+1. Edit or import Markdown
+2. Click **合成语音** — Azure TTS generates per-scene audio + timed subtitle cues
+3. Preview the synced image-above-subtitle layout in the player
+4. Click **生成 MP4**
+
+Synthesized audio is written to `public/.generated/` (gitignored). Without Azure credentials, preview still works on the legacy fixed timeline; MP4 render uses that timeline too.
 
 Recommended runtime: Node 20+.
 
@@ -43,7 +64,10 @@ Local Docker check:
 
 ```console
 docker build -t remotion-workbench .
-docker run --rm -p 8080:8080 remotion-workbench
+docker run --rm -p 8080:8080 \
+  -e AZURE_SPEECH_KEY=your-key \
+  -e AZURE_SPEECH_REGION=eastasia \
+  remotion-workbench
 ```
 
 Then open `http://localhost:8080`.

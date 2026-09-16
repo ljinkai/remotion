@@ -3,6 +3,7 @@ import {
   Audio,
   Composition,
   Img,
+  Sequence,
   interpolate,
   spring,
   staticFile,
@@ -11,10 +12,13 @@ import {
   type CalculateMetadataFunction,
 } from "remotion";
 import {
-  buildTimeline,
+  buildSceneSegments,
   defaultVideoProps,
+  getActiveCue,
   getDurationInFrames,
+  hasSynthesizedTimeline,
   normalizeVideoProps,
+  type SubtitleCue,
   type WeeklyCase,
   type WeeklyVideoProps,
 } from "./videoData";
@@ -50,52 +54,38 @@ const clamp = {
 const fade = (frame: number, start: number, end: number) =>
   interpolate(frame, [start, start + 22, end - 24, end], [0, 1, 1, 0], clamp);
 
-const sceneProgress = (frame: number, start: number, end: number) =>
-  interpolate(frame, [start, end], [0, 1], clamp);
+const sceneProgress = (frame: number, durationFrames: number) =>
+  interpolate(frame, [0, Math.max(durationFrames - 1, 1)], [0, 1], clamp);
 
-const assetSrc = (src: string) => {
-  if (/^(https?:|data:|blob:)/.test(src)) {
+export const assetSrc = (src: string) => {
+  if (/^(https?:|data:|blob:|\/)/.test(src)) {
     return src;
+  }
+  if (
+    typeof window !== "undefined" &&
+    (src.startsWith(".generated/") || src.startsWith("case-images/"))
+  ) {
+    return `/${src}`;
   }
   return staticFile(src);
 };
 
-const Subtitle: React.FC<{ video: WeeklyVideoProps; timeline: number[] }> = ({
-  video,
-  timeline,
-}) => {
+const SceneSubtitles: React.FC<{
+  cues?: SubtitleCue[];
+  fallbackText: string;
+}> = ({ cues, fallbackText }) => {
   const frame = useCurrentFrame();
-  const subtitles = [
-    {
-      start: timeline[0],
-      end: timeline[1],
-      text: video.introSubtitle,
-    },
-    ...video.cases.map((item, index) => ({
-      start: timeline[index + 1],
-      end: timeline[index + 2],
-      text: item.subtitle,
-    })),
-    {
-      start: timeline[timeline.length - 2],
-      end: timeline[timeline.length - 1],
-      text: video.closingSubtitle,
-    },
-  ];
-  const active = subtitles.find(
-    (subtitle) => frame >= subtitle.start && frame < subtitle.end,
-  );
+  const { fps } = useVideoConfig();
+  const sceneMs = (frame / fps) * 1000;
+  const text = getActiveCue(cues, sceneMs, fallbackText);
 
-  if (!active) {
+  if (!text) {
     return null;
   }
 
   return (
-    <div
-      className="subtitleBar"
-      style={{ opacity: fade(frame, active.start, active.end) }}
-    >
-      {active.text}
+    <div className="sceneSubtitleRegion">
+      <p className="sceneSubtitleText">{text}</p>
     </div>
   );
 };
@@ -121,12 +111,9 @@ const Header: React.FC<{ video: WeeklyVideoProps }> = ({ video }) => {
   );
 };
 
-const Cover: React.FC<{ video: WeeklyVideoProps; timeline: number[] }> = ({
-  video,
-  timeline,
-}) => {
+const CoverScene: React.FC<{ video: WeeklyVideoProps }> = ({ video }) => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const { fps, durationInFrames } = useVideoConfig();
   const entrance = spring({
     frame,
     fps,
@@ -134,24 +121,25 @@ const Cover: React.FC<{ video: WeeklyVideoProps; timeline: number[] }> = ({
   });
 
   return (
-    <section
-      className="coverScene"
-      style={{
-        opacity: fade(frame, timeline[0], timeline[1]),
-      }}
-    >
-      <div
-        className="coverTitle"
-        style={{
-          transform: `translateY(${interpolate(entrance, [0, 1], [48, 0])}px)`,
-        }}
+    <AbsoluteFill className="coverSceneLayout">
+      <section
+        className="coverScene"
+        style={{ opacity: fade(frame, 0, durationInFrames) }}
       >
-        <p>第{video.issueNumber}期</p>
-        <h1>{video.coverTitle}</h1>
-        <span>{video.coverSubtitle}</span>
-      </div>
-      <div className="coverBadge">{video.coverBadge}</div>
-    </section>
+        <div
+          className="coverTitle"
+          style={{
+            transform: `translateY(${interpolate(entrance, [0, 1], [48, 0])}px)`,
+          }}
+        >
+          <p>第{video.issueNumber}期</p>
+          <h1>{video.coverTitle}</h1>
+          <span>{video.coverSubtitle}</span>
+        </div>
+        <div className="coverBadge">{video.coverBadge}</div>
+      </section>
+      <SceneSubtitles cues={video.introCues} fallbackText={video.introSubtitle} />
+    </AbsoluteFill>
   );
 };
 
@@ -189,30 +177,28 @@ const CaseImage: React.FC<{
   );
 };
 
-const CaseScene: React.FC<{
-  item: WeeklyCase;
-  start: number;
-  end: number;
-}> = ({ item, start, end }) => {
+const CaseScene: React.FC<{ item: WeeklyCase }> = ({ item }) => {
   const frame = useCurrentFrame();
-  const progress = sceneProgress(frame, start, end);
-  const imageScale = interpolate(progress, [0, 1], [1.06, 1.015]);
-  const imageY = interpolate(progress, [0, 1], [0, -28]);
+  const { durationInFrames } = useVideoConfig();
+  const progress = sceneProgress(frame, durationInFrames);
+  const imageScale = interpolate(progress, [0, 1], [1.04, 1.01]);
+  const imageY = interpolate(progress, [0, 1], [0, -16]);
   const meta = [item.author, item.date].filter(Boolean).join(" · ");
 
   return (
-    <section className="caseScene" style={{ opacity: fade(frame, start, end) }}>
-      <div className="imageStage">
-        <CaseImage item={item} imageScale={imageScale} imageY={imageY} />
-        <div className="fallbackPoster" style={{ borderColor: item.color }}>
-          <span style={{ color: item.color }}>{item.index}</span>
-          <strong>{item.fallback}</strong>
-          <small>{item.title}</small>
+    <AbsoluteFill className="caseSceneLayout">
+      <div className="caseImageRegion">
+        <div className="imageStage">
+          <CaseImage item={item} imageScale={imageScale} imageY={imageY} />
+          <div className="fallbackPoster" style={{ borderColor: item.color }}>
+            <span style={{ color: item.color }}>{item.index}</span>
+            <strong>{item.fallback}</strong>
+            <small>{item.title}</small>
+          </div>
         </div>
-        <div className="imageOverlay" />
       </div>
 
-      <div className="caseCaption">
+      <div className="caseMetaStrip">
         <div className="caseIdentity">
           <span style={{ background: item.color }}>{item.index}</span>
           <div>
@@ -222,57 +208,94 @@ const CaseScene: React.FC<{
         </div>
         <strong style={{ color: item.color }}>{item.metric}</strong>
       </div>
-    </section>
+
+      <SceneSubtitles cues={item.cues} fallbackText={item.subtitle} />
+    </AbsoluteFill>
   );
 };
 
-const Closing: React.FC<{ video: WeeklyVideoProps; timeline: number[] }> = ({
-  video,
-  timeline,
-}) => {
+const ClosingScene: React.FC<{ video: WeeklyVideoProps }> = ({ video }) => {
   const frame = useCurrentFrame();
+  const { durationInFrames } = useVideoConfig();
 
   return (
-    <section
-      className="closingScene"
-      style={{
-        opacity: fade(
-          frame,
-          timeline[timeline.length - 2],
-          timeline[timeline.length - 1],
-        ),
-      }}
-    >
-      <p>{video.closingTitle}</p>
-      <h2>{video.closingSubtitle}</h2>
-    </section>
+    <AbsoluteFill className="closingSceneLayout">
+      <section
+        className="closingScene"
+        style={{ opacity: fade(frame, 0, durationInFrames) }}
+      >
+        <p>{video.closingTitle}</p>
+        <h2>{video.closingSubtitle}</h2>
+      </section>
+      <SceneSubtitles
+        cues={video.closingCues}
+        fallbackText={video.closingSubtitle}
+      />
+    </AbsoluteFill>
   );
 };
 
 export const MyComponent: React.FC<WeeklyVideoProps> = (props) => {
   const frame = useCurrentFrame();
   const video = normalizeVideoProps(props);
-  const timeline = buildTimeline(video);
-  const duration = timeline[timeline.length - 1];
+  const segments = buildSceneSegments(video);
+  const duration = getDurationInFrames(video);
+  const synthesized = hasSynthesizedTimeline(video);
 
   return (
     <AbsoluteFill className="scene">
-      {video.audioSrc ? (
+      {!synthesized && video.audioSrc ? (
         <Audio src={assetSrc(video.audioSrc)} volume={0.95} />
       ) : null}
       <AbsoluteFill className="softBackdrop" />
       <Header video={video} />
-      <Cover video={video} timeline={timeline} />
-      {video.cases.map((item, index) => (
-        <CaseScene
-          item={item}
-          start={timeline[index + 1]}
-          end={timeline[index + 2]}
-          key={item.index}
-        />
-      ))}
-      <Closing video={video} timeline={timeline} />
-      <Subtitle video={video} timeline={timeline} />
+
+      {segments.map((segment) => {
+        if (segment.type === "intro") {
+          return (
+            <Sequence
+              key={segment.id}
+              from={segment.startFrame}
+              durationInFrames={segment.durationFrames}
+            >
+              {video.introAudioSrc ? (
+                <Audio src={assetSrc(video.introAudioSrc)} volume={0.95} />
+              ) : null}
+              <CoverScene video={video} />
+            </Sequence>
+          );
+        }
+
+        if (segment.type === "case" && segment.caseIndex !== undefined) {
+          const item = video.cases[segment.caseIndex];
+          return (
+            <Sequence
+              key={segment.id}
+              from={segment.startFrame}
+              durationInFrames={segment.durationFrames}
+            >
+              {item.audioSrc ? (
+                <Audio src={assetSrc(item.audioSrc)} volume={0.95} />
+              ) : null}
+              <CaseScene item={item} />
+            </Sequence>
+          );
+        }
+
+        return (
+          <Sequence
+            key={segment.id}
+            from={segment.startFrame}
+            durationInFrames={segment.durationFrames}
+          >
+            {video.closingAudioSrc ? (
+              <Audio src={assetSrc(video.closingAudioSrc)} volume={0.95} />
+            ) : null}
+            <ClosingScene video={video} />
+          </Sequence>
+        );
+      })}
+
       <div
         className="ticker"
         style={{
