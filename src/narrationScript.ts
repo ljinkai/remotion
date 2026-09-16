@@ -1,5 +1,6 @@
 import type { WeeklyVideoProps } from "./videoData";
 import { normalizeVideoProps } from "./videoData";
+import { optimizeNarrationForSubtitles } from "./subtitleLines";
 
 export type NarrationScriptCase = {
   index: string;
@@ -43,14 +44,23 @@ export const applyNarrationScript = (
       item.subtitle;
     return {
       ...item,
-      subtitle: narration.trim() || item.subtitle,
+      subtitle:
+        optimizeNarrationForSubtitles(narration) ||
+        narration.trim() ||
+        item.subtitle,
     };
   });
 
   return {
     ...video,
-    introSubtitle: script.intro.trim() || video.introSubtitle,
-    closingSubtitle: script.closing.trim() || video.closingSubtitle,
+    introSubtitle:
+      optimizeNarrationForSubtitles(script.intro) ||
+      script.intro.trim() ||
+      video.introSubtitle,
+    closingSubtitle:
+      optimizeNarrationForSubtitles(script.closing) ||
+      script.closing.trim() ||
+      video.closingSubtitle,
     cases,
   };
 };

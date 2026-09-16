@@ -5,6 +5,7 @@ import {
   type WeeklyVideoProps,
 } from "./videoData";
 import type { NarrationScript } from "./narrationScript";
+import { optimizeNarrationForSubtitles } from "./subtitleLines";
 
 export const sampleMarkdown = `---
 issue: 156
@@ -309,7 +310,7 @@ export const tryBuildScriptFromMarkdown = (
     return {
       index: String(index + 1).padStart(2, "0"),
       title: section.title || `条目 ${index + 1}`,
-      narration,
+      narration: optimizeNarrationForSubtitles(narration || ""),
     };
   });
 
@@ -318,9 +319,9 @@ export const tryBuildScriptFromMarkdown = (
   }
 
   return {
-    intro: introNarration,
+    intro: optimizeNarrationForSubtitles(introNarration),
     cases,
-    closing: closingNarration,
+    closing: optimizeNarrationForSubtitles(closingNarration),
     source: "markdown",
   };
 };

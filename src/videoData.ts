@@ -462,18 +462,24 @@ export const getActiveCue = (
   sceneMs: number,
   fallbackText: string,
 ): string => {
+  const singleLine = (value: string) =>
+    String(value || "")
+      .split(/\n+/)
+      .map((item) => item.trim())
+      .find(Boolean) || "";
+
   if (!cues || cues.length === 0) {
-    return fallbackText;
+    return singleLine(fallbackText);
   }
   const active = cues.find(
     (cue) => sceneMs >= cue.startMs && sceneMs < cue.endMs,
   );
   if (active) {
-    return active.text;
+    return singleLine(active.text);
   }
   const last = cues[cues.length - 1];
   if (sceneMs >= last.endMs) {
-    return last.text;
+    return singleLine(last.text);
   }
-  return cues[0]?.text || fallbackText;
+  return singleLine(cues[0]?.text || fallbackText);
 };

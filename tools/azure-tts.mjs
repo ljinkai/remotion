@@ -1,5 +1,11 @@
 import sdk from "microsoft-cognitiveservices-speech-sdk";
 import { writeFile } from "node:fs/promises";
+import {
+  HARD_SUBTITLE_CHARS,
+  MAX_SUBTITLE_CHARS,
+  buildTimedSubtitleCues,
+  charLen,
+} from "./subtitle-lines.mjs";
 
 const DEFAULT_VOICE = "zh-CN-YunxiNeural";
 const SENTENCE_BOUNDARY = sdk.SpeechSynthesisBoundaryType?.Sentence ?? 1;
@@ -37,7 +43,7 @@ const aggregateWordBoundariesToCues = (boundaries, fullText, durationMs) => {
       return;
     }
     cues.push({
-      text,
+      text: text.replace(/[，、；;：:]+$/u, "").trim() || text,
       startMs: bufferStartMs,
       endMs: Math.max(endMs, bufferStartMs + 1),
     });
@@ -52,9 +58,30 @@ const aggregateWordBoundariesToCues = (boundaries, fullText, durationMs) => {
     }
 
     buffer += boundary.text;
-    if (/[。！？!?]$/.test(boundary.text.trim())) {
-      flush(boundary.audioOffsetMs + boundary.durationMs);
-      bufferStartMs = boundary.audioOffsetMs + boundary.durationMs;
+    const trimmedBuffer = buffer.trim();
+    const punct = boundary.text.trim();
+    const endMs = boundary.audioOffsetMs + boundary.durationMs;
+
+    if (/[。！？!?]$/.test(punct)) {
+      flush(endMs);
+      bufferStartMs = endMs;
+      continue;
+    }
+
+    // Soft pause: split once the line is long enough for readable type.
+    if (
+      /[，、；;：:]$/.test(punct) &&
+      charLen(trimmedBuffer) >= Math.min(12, MAX_SUBTITLE_CHARS)
+    ) {
+      flush(endMs);
+      bufferStartMs = endMs;
+      continue;
+    }
+
+    // Hard cap so a long clause cannot stay on screen as tiny text.
+    if (charLen(trimmedBuffer) >= HARD_SUBTITLE_CHARS) {
+      flush(endMs);
+      bufferStartMs = endMs;
     }
   }
 
@@ -140,11 +167,7 @@ export const synthesizeScene = async (text, outputPath) => {
       500,
     );
 
-    const cues = aggregateWordBoundariesToCues(
-      boundaries,
-      narration,
-      durationMs,
-    );
+    const cues = buildTimedSubtitleCues(narration, durationMs, boundaries);
 
     return {
       durationMs,

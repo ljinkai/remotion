@@ -11,6 +11,7 @@ import {
   applyNarrationScript,
   scriptIsComplete,
 } from "../src/narrationScript";
+import { optimizeNarrationForSubtitles } from "../src/subtitleLines";
 import { getDurationInFrames } from "../src/videoData";
 import {
   VIDEO_TEMPLATES,
@@ -43,6 +44,7 @@ function App() {
   const [script, setScript] = useState(null);
   const [synthesizedProps, setSynthesizedProps] = useState(null);
   const [currentFrame, setCurrentFrame] = useState(0);
+  const [editorTab, setEditorTab] = useState("markdown");
 
   const parsedProps = useMemo(
     () => parseMarkdownToVideo(markdown),
@@ -139,6 +141,23 @@ function App() {
     setSynthesizedProps(null);
   };
 
+  const formatScript = (raw) => {
+    if (!raw || typeof raw !== "object") {
+      return raw;
+    }
+    return {
+      ...raw,
+      intro: optimizeNarrationForSubtitles(raw.intro ?? ""),
+      closing: optimizeNarrationForSubtitles(raw.closing ?? ""),
+      cases: Array.isArray(raw.cases)
+        ? raw.cases.map((item) => ({
+            ...item,
+            narration: optimizeNarrationForSubtitles(item.narration ?? ""),
+          }))
+        : [],
+    };
+  };
+
   const generateScript = async () => {
     setScripting(true);
     setError("");
@@ -146,9 +165,10 @@ function App() {
     try {
       const fromMarkdown = tryBuildScriptFromMarkdown(markdown);
       if (fromMarkdown) {
-        setScript(fromMarkdown);
+        setScript(formatScript(fromMarkdown));
         setSynthesizedProps(null);
-        setStatus("已从 Markdown 旁白字段载入逐字稿（未调用千问）");
+        setEditorTab("script");
+        setStatus("已从 Markdown 旁白载入逐字稿（已按字幕行拆分）");
         return;
       }
 
@@ -161,9 +181,10 @@ function App() {
       if (!response.ok) {
         throw new Error(body.error || "生成逐字稿失败");
       }
-      setScript(body.script);
+      setScript(formatScript(body.script));
       setSynthesizedProps(null);
-      setStatus("千问逐字稿已生成，可编辑后再合成语音");
+      setEditorTab("script");
+      setStatus("千问逐字稿已生成（已按字幕行拆分），可编辑后再合成");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setStatus("");
@@ -193,7 +214,11 @@ function App() {
       setSynthesizedProps(body.props);
       setCurrentFrame(0);
       playerRef.current?.seekTo(0);
-      setStatus(`语音合成完成（${body.synthId}）`);
+      const cache = body.cache;
+      const cacheNote = cache
+        ? `，缓存命中 ${cache.hits}/未命中 ${cache.misses}`
+        : "";
+      setStatus(`语音合成完成（${body.synthId}${cacheNote}）`);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setStatus("");
@@ -253,187 +278,212 @@ function App() {
             </button>
           </label>
         </div>
-        <textarea
-          value={markdown}
-          onChange={(event) => updateMarkdown(event.target.value)}
-        />
-        <div className="actions">
-          <button type="button" onClick={() => updateMarkdown(sampleMarkdown)}>
+
+        <div className="editorTabs" role="tablist">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={editorTab === "markdown"}
+            className={`editorTab${editorTab === "markdown" ? " active" : ""}`}
+            onClick={() => setEditorTab("markdown")}
+          >
+            Markdown
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={editorTab === "script"}
+            className={`editorTab${editorTab === "script" ? " active" : ""}`}
+            onClick={() => setEditorTab("script")}
+          >
+            逐字稿{hasScript ? "" : " · 未生成"}
+          </button>
+        </div>
+
+        <div className="editorBody">
+          {editorTab === "markdown" ? (
+            <textarea
+              className="mdEditor"
+              value={markdown}
+              onChange={(event) => updateMarkdown(event.target.value)}
+            />
+          ) : script ? (
+            <section className="scriptPanel">
+              <h3>
+                逐字稿
+                <span className="meta"> · {script.source}</span>
+              </h3>
+              <div className="scriptField">
+                <label>封面 / 导语</label>
+                <textarea
+                  value={script.intro}
+                  onChange={(event) =>
+                    updateScriptField({ intro: event.target.value })
+                  }
+                />
+              </div>
+              {script.cases.map((item) => (
+                <div className="scriptField" key={item.index}>
+                  <label>
+                    案例 {item.index} · {item.title}
+                  </label>
+                  <textarea
+                    value={item.narration}
+                    onChange={(event) =>
+                      updateCaseNarration(item.index, event.target.value)
+                    }
+                  />
+                </div>
+              ))}
+              <div className="scriptField">
+                <label>结尾</label>
+                <textarea
+                  value={script.closing}
+                  onChange={(event) =>
+                    updateScriptField({ closing: event.target.value })
+                  }
+                />
+              </div>
+            </section>
+          ) : (
+            <section className="scriptPanel">
+              <p className="scriptEmpty">
+                还没有逐字稿。点右侧工具栏「生成逐字稿」，或先在 Markdown
+                里写好旁白后再生成。
+              </p>
+            </section>
+          )}
+        </div>
+
+        <div className="panelActions">
+          <button
+            className="secondary"
+            type="button"
+            onClick={() => updateMarkdown(sampleMarkdown)}
+          >
             示例
-          </button>
-          <button
-            className="secondary"
-            type="button"
-            onClick={generateScript}
-            disabled={busy}
-          >
-            {scripting ? "生成中" : "生成逐字稿"}
-          </button>
-          <button
-            className="secondary"
-            type="button"
-            onClick={synthesizeSpeech}
-            disabled={busy}
-          >
-            {synthesizing ? "合成中" : "合成语音"}
-          </button>
-          <button
-            className="secondary"
-            type="button"
-            onClick={renderVideo}
-            disabled={busy}
-          >
-            {rendering ? "渲染中" : "生成 MP4"}
           </button>
         </div>
         <div className={`status${error ? " error" : ""}`}>
           {error || status}
         </div>
-        {!hasScript ? (
-          <p className="meta">
-            建议先点「生成逐字稿」（千问），编辑口播后再「合成语音」。
-          </p>
-        ) : null}
-
-        {script ? (
-          <section className="scriptPanel">
-            <h3>
-              逐字稿
-              <span className="meta"> · {script.source}</span>
-            </h3>
-            <div className="scriptField">
-              <label>封面 / 导语</label>
-              <textarea
-                value={script.intro}
-                onChange={(event) =>
-                  updateScriptField({ intro: event.target.value })
-                }
-              />
-            </div>
-            {script.cases.map((item) => (
-              <div className="scriptField" key={item.index}>
-                <label>
-                  案例 {item.index} · {item.title}
-                </label>
-                <textarea
-                  value={item.narration}
-                  onChange={(event) =>
-                    updateCaseNarration(item.index, event.target.value)
-                  }
-                />
-              </div>
-            ))}
-            <div className="scriptField">
-              <label>结尾</label>
-              <textarea
-                value={script.closing}
-                onChange={(event) =>
-                  updateScriptField({ closing: event.target.value })
-                }
-              />
-            </div>
-          </section>
-        ) : null}
       </section>
 
-      <section className="preview">
-        <div className="templateBar">
-          <div className="templateBarHead">
-            <strong>画幅</strong>
-            <span className="meta">{activeFormat.blurb}</span>
+      <section className="workspace">
+        <div className="toolbar">
+          <div className="toolbarGroup">
+            <span>画幅</span>
+            <div className="seg">
+              {VIDEO_FORMATS.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={aspect === item.id ? "active" : ""}
+                  onClick={() => selectAspect(item.id)}
+                  title={item.blurb}
+                >
+                  {item.id === "landscape" ? "横屏" : "竖屏"}
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="formatGrid">
-            {VIDEO_FORMATS.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className={`formatCard${aspect === item.id ? " active" : ""}`}
-                onClick={() => selectAspect(item.id)}
-                title={item.blurb}
-              >
-                <span
-                  className={`formatIcon formatIcon--${item.id}`}
-                  aria-hidden
-                />
-                <span className="templateLabel">{item.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="templateBar">
-          <div className="templateBarHead">
-            <strong>画面模板</strong>
-            <span className="meta">{activeTemplate.blurb}</span>
-          </div>
-          <div className="templateGrid">
-            {VIDEO_TEMPLATES.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className={`templateCard${templateId === item.id ? " active" : ""}`}
-                onClick={() => selectTemplate(item.id)}
-                title={item.blurb}
-              >
-                <span
-                  className="templateSwatch"
+
+          <div className="toolbarGroup">
+            <span>模板</span>
+            <div className="swatchRow">
+              {VIDEO_TEMPLATES.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={`swatchBtn${templateId === item.id ? " active" : ""}`}
                   data-template={item.id}
-                  aria-hidden
+                  onClick={() => selectTemplate(item.id)}
+                  title={`${item.label} · ${item.blurb}`}
+                  aria-label={item.label}
                 />
-                <span className="templateLabel">{item.label}</span>
-              </button>
-            ))}
+              ))}
+            </div>
+            <span className="meta" style={{ marginTop: 0 }}>
+              {activeTemplate.label}
+            </span>
+          </div>
+
+          <div className="toolbarGrow" />
+
+          <div className="toolbarActions">
+            <button
+              className="secondary"
+              type="button"
+              onClick={() => {
+                setEditorTab("script");
+                generateScript();
+              }}
+              disabled={busy}
+            >
+              {scripting ? "生成中" : "生成逐字稿"}
+            </button>
+            <button
+              className="secondary"
+              type="button"
+              onClick={synthesizeSpeech}
+              disabled={busy}
+            >
+              {synthesizing ? "合成中" : "合成语音"}
+            </button>
+            <button type="button" onClick={renderVideo} disabled={busy}>
+              {rendering ? "渲染中" : "生成 MP4"}
+            </button>
           </div>
         </div>
-        <div
-          className={`stage${aspect === "portrait" ? " stage--portrait" : ""}`}
-        >
-          <Player
-            ref={playerRef}
-            component={MyComponent}
-            inputProps={props}
-            durationInFrames={durationInFrames}
-            fps={30}
-            compositionWidth={activeFormat.width}
-            compositionHeight={activeFormat.height}
-            style={
-              aspect === "portrait"
-                ? { width: "auto", height: "min(72vh, 720px)", aspectRatio: "9 / 16" }
-                : { width: "100%", aspectRatio: "16 / 9" }
-            }
-            controls
-            loop
-          />
+
+        <div className="workspaceMain">
+          <div className="previewCol">
+            <div
+              className={`stage${aspect === "portrait" ? " stage--portrait" : ""}`}
+            >
+              <Player
+                ref={playerRef}
+                component={MyComponent}
+                inputProps={props}
+                durationInFrames={durationInFrames}
+                fps={30}
+                compositionWidth={activeFormat.width}
+                compositionHeight={activeFormat.height}
+                style={
+                  aspect === "portrait"
+                    ? {
+                        width: "auto",
+                        height: "min(52vh, 520px)",
+                        aspectRatio: "9 / 16",
+                      }
+                    : {
+                        width: "100%",
+                        maxHeight: "min(52vh, 520px)",
+                        aspectRatio: "16 / 9",
+                      }
+                }
+                controls
+              />
+            </div>
+
+            <p className="previewMeta">
+              第{props.issueNumber}期 · {props.coverTitle} · {props.cases.length}{" "}
+              条 · {Math.round(durationInFrames / 30)}s · {activeFormat.label} ·{" "}
+              {activeTemplate.label} · 逐字稿{" "}
+              <code>{hasScript ? script.source : "未生成"}</code> · 语音{" "}
+              <code>{hasVoice ? "已合成" : "未合成"}</code>
+            </p>
+          </div>
+
+          <aside className="cueCol">
+            <CueTimelinePanel
+              props={props}
+              hasVoice={hasVoice}
+              currentFrame={currentFrame}
+              onSeek={seekToCue}
+            />
+          </aside>
         </div>
-        <div className="summary">
-          <div className="stat">
-            <span>期号</span>
-            <strong>{props.issueNumber}</strong>
-          </div>
-          <div className="stat">
-            <span>主题</span>
-            <strong>{props.coverTitle}</strong>
-          </div>
-          <div className="stat">
-            <span>条目</span>
-            <strong>{props.cases.length}</strong>
-          </div>
-          <div className="stat">
-            <span>时长</span>
-            <strong>{Math.round(durationInFrames / 30)}s</strong>
-          </div>
-        </div>
-        <CueTimelinePanel
-          props={props}
-          hasVoice={hasVoice}
-          currentFrame={currentFrame}
-          onSeek={seekToCue}
-        />
-        <p className="meta">
-          画幅：<code>{aspect}</code> · 模板：<code>{templateId}</code> · 逐字稿：
-          <code>{hasScript ? script.source : "未生成"}</code> · 语音：
-          <code>{hasVoice ? "已合成" : "未合成"}</code> · 输出：
-          <code>out/</code>
-        </p>
       </section>
     </main>
   );

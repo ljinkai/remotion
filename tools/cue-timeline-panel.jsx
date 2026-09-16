@@ -39,17 +39,23 @@ export function CueTimelinePanel({
 
   if (!hasVoice) {
     return (
-      <section className="cueTimeline">
-        <h3>字幕时间轴</h3>
-        <p className="cueTimelineEmpty">合成语音后，这里会显示每句字幕的起止时间。</p>
+      <section className="cueTimeline cueTimeline--empty">
+        <div className="cueTimelineHeader">
+          <h3>字幕时间轴</h3>
+        </div>
+        <p className="cueTimelineEmpty">
+          合成语音后，这里会列出每句字幕；点击可跳到对应画面。
+        </p>
       </section>
     );
   }
 
   if (entries.length === 0) {
     return (
-      <section className="cueTimeline">
-        <h3>字幕时间轴</h3>
+      <section className="cueTimeline cueTimeline--empty">
+        <div className="cueTimelineHeader">
+          <h3>字幕时间轴</h3>
+        </div>
         <p className="cueTimelineEmpty">当前没有可用的字幕 cue。</p>
       </section>
     );

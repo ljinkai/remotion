@@ -48,7 +48,7 @@ Workflow:
 4. Click **合成语音** — Azure TTS + timed cues from the script
 5. Preview cue timeline / player, then **生成 MP4**
 
-Synthesized audio is written to `public/.generated/` (gitignored). Without Azure credentials, preview still works on the legacy fixed timeline; MP4 render uses that timeline too. Without Qwen credentials, you can still hand-write `旁白:` in Markdown or skip AI and synthesize short MD-derived lines.
+Synthesized audio is written to `public/generated/` (gitignored). Identical narration text + voice is cached under `.workbench/tts-cache/` and reused on later synthesize (no Azure call). Change the script or `AZURE_SPEECH_VOICE` to bust the cache. Without Azure credentials, preview still works on the legacy fixed timeline; MP4 render uses that timeline too. Without Qwen credentials, you can still hand-write `旁白:` in Markdown or skip AI and synthesize short MD-derived lines.
 
 Recommended runtime: Node 20+.
 

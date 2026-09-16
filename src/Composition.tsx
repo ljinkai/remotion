@@ -5,7 +5,6 @@ import {
   Img,
   Sequence,
   interpolate,
-  spring,
   staticFile,
   useCurrentFrame,
   useVideoConfig,
@@ -23,6 +22,7 @@ import {
   type WeeklyCase,
   type WeeklyVideoProps,
 } from "./videoData";
+import { ensureSingleLineCues } from "./subtitleLines";
 import { getVideoTemplate } from "./videoTemplates";
 import { getVideoFormat } from "./videoFormats";
 
@@ -70,7 +70,7 @@ const clamp = {
 };
 
 const fade = (frame: number, start: number, end: number) =>
-  interpolate(frame, [start, start + 22, end - 24, end], [0, 1, 1, 0], clamp);
+  interpolate(frame, [start, end - 24, end], [1, 1, 0], clamp);
 
 const sceneProgress = (frame: number, durationFrames: number) =>
   interpolate(frame, [0, Math.max(durationFrames - 1, 1)], [0, 1], clamp);
@@ -147,9 +147,11 @@ const SceneSubtitles: React.FC<{
   portrait?: boolean;
 }> = ({ cues, fallbackText, portrait = false }) => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const { fps, durationInFrames } = useVideoConfig();
   const sceneMs = (frame / fps) * 1000;
-  const text = getActiveCue(cues, sceneMs, fallbackText);
+  const durationMs = (durationInFrames / fps) * 1000;
+  const lineCues = ensureSingleLineCues(cues, fallbackText, durationMs);
+  const text = getActiveCue(lineCues, sceneMs, "").split(/\n/)[0]?.trim() || "";
 
   if (!text) {
     return null;
@@ -237,12 +239,6 @@ const CoverImageBackdrop: React.FC<{
     <AbsoluteFill className="coverBackdrop">
       {images.map((src, index) => {
         const layout = layouts[index % layouts.length];
-        const appear = interpolate(
-          frame,
-          [index * 5, index * 5 + 14],
-          [0, 1],
-          clamp,
-        );
         const zoom = interpolate(
           frame,
           [0, Math.max(durationInFrames - 1, 1)],
@@ -272,7 +268,7 @@ const CoverImageBackdrop: React.FC<{
               width: layout.width,
               height: layout.height,
               zIndex: layout.z,
-              opacity: appear * 0.92,
+              opacity: 1,
               transform: `rotate(${layout.rotate}deg)`,
             }}
           >
@@ -289,8 +285,8 @@ const CoverImageBackdrop: React.FC<{
           </div>
         );
       })}
-      <AbsoluteFill className="coverBackdropVeil" />
-      <AbsoluteFill className="coverBackdropGrain" />
+      <AbsoluteFill className="coverBackdropVeil" style={{ zIndex: 2 }} />
+      <AbsoluteFill className="coverBackdropGrain" style={{ zIndex: 3 }} />
     </AbsoluteFill>
   );
 };
@@ -299,24 +295,6 @@ const CoverScene: React.FC<{
   video: WeeklyVideoProps;
   portrait?: boolean;
 }> = ({ video, portrait = false }) => {
-  const frame = useCurrentFrame();
-  const { fps, durationInFrames } = useVideoConfig();
-  const brandIn = spring({
-    frame,
-    fps,
-    config: { damping: 16, stiffness: 80 },
-  });
-  const issueIn = spring({
-    frame: Math.max(frame - 6, 0),
-    fps,
-    config: { damping: 14, stiffness: 70 },
-  });
-  const themeIn = spring({
-    frame: Math.max(frame - 14, 0),
-    fps,
-    config: { damping: 18, stiffness: 90 },
-  });
-  const lineWidth = interpolate(brandIn, [0, 1], [0, portrait ? 160 : 220], clamp);
   const brandSize = portrait ? 28 : 36;
   const issueSize = portrait ? 72 : 110;
   const themeSize = fitCoverTitleSize(video.coverTitle, portrait);
@@ -324,43 +302,20 @@ const CoverScene: React.FC<{
   return (
     <AbsoluteFill className="coverSceneLayout">
       <CoverImageBackdrop cases={video.cases} portrait={portrait} />
-      <section
-        className="coverScene"
-        style={{ opacity: fade(frame, 0, durationInFrames) }}
-      >
+      <section className="coverScene">
         <div className="coverMain">
           <div className="coverBrandBlock">
-            <p
-              className="coverBrandName"
-              style={{
-                fontSize: brandSize,
-                opacity: brandIn,
-                transform: `translateY(${interpolate(brandIn, [0, 1], [24, 0])}px)`,
-              }}
-            >
+            <p className="coverBrandName" style={{ fontSize: brandSize }}>
               {video.headerTitle}
             </p>
             <div
               className="coverBrandLine"
-              style={{ width: lineWidth, opacity: brandIn }}
+              style={{ width: portrait ? 160 : 220 }}
             />
-            <h1
-              className="coverIssueNumber"
-              style={{
-                fontSize: issueSize,
-                opacity: issueIn,
-                transform: `translateY(${interpolate(issueIn, [0, 1], [36, 0])}px)`,
-              }}
-            >
+            <h1 className="coverIssueNumber" style={{ fontSize: issueSize }}>
               第{video.issueNumber}期
             </h1>
-            <div
-              className="coverThemeBlock"
-              style={{
-                opacity: themeIn,
-                transform: `translateY(${interpolate(themeIn, [0, 1], [28, 0])}px)`,
-              }}
-            >
+            <div className="coverThemeBlock">
               <h2 className="coverThemeTitle" style={{ fontSize: themeSize }}>
                 {video.coverTitle}
               </h2>
@@ -375,12 +330,11 @@ const CoverScene: React.FC<{
           {video.coverBadge ? (
             <div
               className="coverBadge"
-              style={{
-                opacity: themeIn,
-                ...(portrait
+              style={
+                portrait
                   ? { fontSize: 28, padding: "16px 20px" }
-                  : undefined),
-              }}
+                  : undefined
+              }
             >
               {video.coverBadge}
             </div>

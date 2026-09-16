@@ -1,6 +1,13 @@
+import {
+  MAX_SUBTITLE_CHARS,
+  optimizeNarrationForSubtitles,
+} from "./subtitle-lines.mjs";
+
 const DEFAULT_BASE_URL =
   "https://dashscope-intl.aliyuncs.com/compatible-mode/v1";
 const DEFAULT_MODEL = "qwen-plus";
+
+export { optimizeNarrationForSubtitles } from "./subtitle-lines.mjs";
 
 export const getScriptLlmConfig = () => {
   const apiKey =
@@ -44,8 +51,8 @@ const normalizeScriptPayload = (payload, props) => {
     throw new Error("逐字稿 JSON 结构无效");
   }
 
-  const intro = String(payload.intro ?? "").trim();
-  const closing = String(payload.closing ?? "").trim();
+  const intro = optimizeNarrationForSubtitles(payload.intro ?? "");
+  const closing = optimizeNarrationForSubtitles(payload.closing ?? "");
   if (!intro || !closing) {
     throw new Error("逐字稿缺少 intro 或 closing");
   }
@@ -59,7 +66,9 @@ const normalizeScriptPayload = (payload, props) => {
 
   const cases = props.cases.map((item, index) => {
     const entry = rawCases[index] ?? {};
-    const narration = String(entry.narration ?? entry.text ?? "").trim();
+    const narration = optimizeNarrationForSubtitles(
+      entry.narration ?? entry.text ?? "",
+    );
     if (!narration) {
       throw new Error(`逐字稿案例 ${item.index} 旁白为空`);
     }
@@ -88,14 +97,25 @@ const buildUserPrompt = (props) => {
     draft: item.subtitle,
   }));
 
-  return `请把下面的「独立开发变现周刊」结构化内容，改写成适合 TTS 口播的中文逐字稿。
+  return `请把下面的「独立开发变现周刊」结构化内容，改写成适合「上图下字幕」视频的中文口播逐字稿。
 
 要求：
 1. 只输出一个 JSON 对象，不要 Markdown，不要解释。
 2. JSON 形状：{"intro":"...","cases":[{"index":"01","narration":"..."},...],"closing":"..."}
 3. cases 数量必须为 ${props.cases.length}，index 与输入一致。
-4. 口语短句，适合朗读；保留产品名与关键数字；不要 URL、emoji、列表符号。
-5. 每个 narration 约 40～80 字，可用「第一条」「接下来」等衔接。
+4. 口语短句，适合朗读与屏幕字幕；保留产品名与关键数字；不要 URL、emoji、列表符号。
+5. 【字幕硬性约束】每一行字幕（以。！？结尾）必须 ≤${MAX_SUBTITLE_CHARS} 个汉字，尽量 8～${MAX_SUBTITLE_CHARS} 字。超长意思必须拆成多行。
+6. narration 内部用换行分隔每一行字幕；行与行之间不要粘成一大段。
+7. 「第一条」「接下来」等短衔接可与下一短句同一行，中间用空格：例如「第一条 小众产品重启记。」
+8. 两个都很短的动作句可用逗号合成一行：例如「用时仅三个月，重新激活老用户。」
+9. 每个场景 3～6 行字幕，总字数约 40～80。
+   正确示例：
+   第一条 小众产品重启记。
+   作者是@farrux_hewson。
+   用时仅三个月，重新激活老用户。
+   实现稳定变现。
+   错误示例：「第一条。小众产品重启记。作者是@farrux_hewson。用时仅三个月。重新激活老用户。实现稳定变现。」粘成一行长串。
+10. 不要 URL、emoji、列表符号。
 
 输入：
 ${JSON.stringify(
@@ -121,12 +141,11 @@ const callChatCompletions = async ({ apiKey, baseUrl, model }, props) => {
     },
     body: JSON.stringify({
       model,
-      temperature: 0.4,
+      temperature: 0.35,
       messages: [
         {
           role: "system",
-          content:
-            "你是中文口播逐字稿编辑。输出严格 JSON，服务视频旁白与字幕对齐。",
+          content: `你是中文口播与字幕编辑。输出严格 JSON。每个 narration 用换行分成多行短字幕，每行不超过 ${MAX_SUBTITLE_CHARS} 个汉字。禁止超长单行。`,
         },
         {
           role: "user",

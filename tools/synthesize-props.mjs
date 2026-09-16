@@ -1,12 +1,17 @@
 import { mkdir, cp } from "node:fs/promises";
 import path from "node:path";
-import { synthesizeScene } from "./azure-tts.mjs";
+import { getAzureSpeechConfig, synthesizeScene } from "./azure-tts.mjs";
+import { readTtsCache, writeTtsCache } from "./tts-cache.mjs";
 
 const SCENE_PADDING_MS = 300;
 const SILENT_DURATION_MS = 2000;
+const DEFAULT_VOICE = "zh-CN-YunxiNeural";
 
 const synthId = () =>
   new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
+
+const resolveVoice = () =>
+  process.env.AZURE_SPEECH_VOICE?.trim() || DEFAULT_VOICE;
 
 export const synthesizeVideoProps = async (props, { root }) => {
   const id = synthId();
@@ -16,6 +21,8 @@ export const synthesizeVideoProps = async (props, { root }) => {
   const publicDir = path.join(root, "public", "generated", `synth-${id}`);
   await mkdir(workDir, { recursive: true });
   await mkdir(publicDir, { recursive: true });
+
+  const voice = resolveVoice();
 
   const enriched = structuredClone(props);
   enriched.useSynthesizedTimeline = true;
@@ -38,9 +45,12 @@ export const synthesizeVideoProps = async (props, { root }) => {
       filename: `scene_${String(index + 1).padStart(2, "0")}_case.wav`,
       caseIndex: index,
       apply: (result, publicPath) => {
-        enriched.cases[index].durationMs = result.durationMs || SILENT_DURATION_MS;
+        enriched.cases[index].durationMs =
+          result.durationMs || SILENT_DURATION_MS;
         enriched.cases[index].cues = result.cues;
-        enriched.cases[index].audioSrc = result.audioPath ? publicPath : undefined;
+        enriched.cases[index].audioSrc = result.audioPath
+          ? publicPath
+          : undefined;
       },
     })),
     {
@@ -55,20 +65,62 @@ export const synthesizeVideoProps = async (props, { root }) => {
     },
   ];
 
+  let cacheHits = 0;
+  let cacheMisses = 0;
+  let ensuredAzure = false;
+
   for (const scene of scenes) {
+    const narration = String(scene.text || "").trim();
+    if (!narration) {
+      scene.apply(
+        { durationMs: SILENT_DURATION_MS, cues: [], audioPath: null },
+        undefined,
+      );
+      continue;
+    }
+
+    const cached = await readTtsCache(root, narration, voice);
+    if (cached) {
+      cacheHits += 1;
+      scene.apply(
+        {
+          durationMs: cached.durationMs,
+          cues: cached.cues,
+          audioPath: cached.audioPath,
+        },
+        cached.relativePublicPath,
+      );
+      continue;
+    }
+
+    if (!ensuredAzure) {
+      // Validate credentials only when we actually need Azure.
+      getAzureSpeechConfig();
+      ensuredAzure = true;
+    }
+
+    cacheMisses += 1;
     const workPath = path.join(workDir, scene.filename);
-    const publicPath = path.join(publicDir, scene.filename);
     const result = await synthesizeScene(scene.text, workPath);
     if (result.audioPath) {
+      const stored = await writeTtsCache(root, narration, voice, {
+        durationMs: result.durationMs,
+        cues: result.cues,
+        sourceAudioPath: workPath,
+      });
+      // Keep a per-run copy for debugging / job artifacts.
+      const publicPath = path.join(publicDir, scene.filename);
       await cp(workPath, publicPath);
+      scene.apply(result, stored?.relativePublicPath);
+    } else {
+      scene.apply(result, undefined);
     }
-    const relativePublicPath = `generated/synth-${id}/${scene.filename}`;
-    scene.apply(result, relativePublicPath);
   }
 
   return {
     synthId: id,
     props: enriched,
     paddingMs: SCENE_PADDING_MS,
+    cache: { hits: cacheHits, misses: cacheMisses, voice },
   };
 };
