@@ -5,7 +5,7 @@ import path from "node:path";
 import { generateNarrationScript } from "./script-llm.mjs";
 import { synthesizeVideoProps } from "./synthesize-props.mjs";
 import { loadMarkdownRuntime } from "./markdown-runtime.mjs";
-import { uploadFileToQiniu } from "./qiniu-upload.mjs";
+import { uploadFileToQiniu, getQiniuConfig } from "./qiniu-upload.mjs";
 import {
   jobsRoot,
   nowIso,
@@ -210,9 +210,10 @@ const runOneJob = async (root, jobId) => {
     await renderToPath(root, enriched, outputPath, propsPath);
 
     await updateJob(root, jobId, { status: "uploading" });
+    const { keyPrefix } = getQiniuConfig();
     const objectKey = job.client_ref
-      ? `weekly-video/${job.client_ref}/${jobId}.mp4`
-      : `remotion-weekly/${jobId}.mp4`;
+      ? `${keyPrefix}/${job.client_ref}/${jobId}.mp4`
+      : `${keyPrefix}/${jobId}.mp4`;
     const videoUrl = await uploadFileToQiniu(outputPath, objectKey);
 
     job = await updateJob(root, jobId, {

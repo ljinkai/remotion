@@ -117,6 +117,7 @@ docker run --rm -p 8080:8080 \
   -e QINIU_SECRET_KEY=... \
   -e QINIU_BUCKET=... \
   -e QINIU_CDN_DOMAIN=... \
+  -e QINIU_KEY_PREFIX=weekly-video \
   remotion-workbench
 ```
 

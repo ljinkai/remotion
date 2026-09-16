@@ -12,7 +12,10 @@ export const getQiniuConfig = () => {
   const secretKey = process.env.QINIU_SECRET_KEY?.trim() || "";
   const bucket = process.env.QINIU_BUCKET?.trim() || "";
   const cdnDomain = process.env.QINIU_CDN_DOMAIN?.trim() || "";
-  return { accessKey, secretKey, bucket, cdnDomain };
+  const keyPrefix = (
+    process.env.QINIU_KEY_PREFIX?.trim() || "weekly-video"
+  ).replace(/^\/+|\/+$/g, "");
+  return { accessKey, secretKey, bucket, cdnDomain, keyPrefix };
 };
 
 export const ensureQiniuConfigured = () => {
