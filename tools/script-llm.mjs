@@ -104,18 +104,18 @@ const buildUserPrompt = (props) => {
 2. JSON 形状：{"intro":"...","cases":[{"index":"01","narration":"..."},...],"closing":"..."}
 3. cases 数量必须为 ${props.cases.length}，index 与输入一致。
 4. 口语短句，适合朗读与屏幕字幕；保留产品名与关键数字；不要 URL、emoji、列表符号。
-5. 【字幕硬性约束】每一行字幕（以。！？结尾）必须 ≤${MAX_SUBTITLE_CHARS} 个汉字，尽量 8～${MAX_SUBTITLE_CHARS} 字。超长意思必须拆成多行。
-6. narration 内部用换行分隔每一行字幕；行与行之间不要粘成一大段。
-7. 「第一条」「接下来」等短衔接可与下一短句同一行，中间用空格：例如「第一条 小众产品重启记。」
-8. 两个都很短的动作句可用逗号合成一行：例如「用时仅三个月，重新激活老用户。」
-9. 每个场景 3～6 行字幕，总字数约 40～80。
+5. 【字幕硬性约束】每一行字幕必须 ≤${MAX_SUBTITLE_CHARS} 个汉字。遇到逗号、句号、顿号、分号等都要拆成新行。
+6. narration 用换行分隔每一行；行内不要出现，。！？、；：等标点。
+7. 「第一条」等短衔接可与下一短句同一行，中间用空格：例如「第一条 小众产品重启记」
+8. 每个场景 4～8 行短字幕。
    正确示例：
-   第一条 小众产品重启记。
-   作者是@farrux_hewson。
-   用时仅三个月，重新激活老用户。
-   实现稳定变现。
-   错误示例：「第一条。小众产品重启记。作者是@farrux_hewson。用时仅三个月。重新激活老用户。实现稳定变现。」粘成一行长串。
-10. 不要 URL、emoji、列表符号。
+   第一条 小众产品重启记
+   作者是@farrux_hewson
+   用时仅三个月
+   重新激活老用户
+   实现稳定变现
+   错误示例：带逗号句号的长串，或把多句粘在一行。
+9. 不要 URL、emoji、列表符号。
 
 输入：
 ${JSON.stringify(
@@ -145,7 +145,7 @@ const callChatCompletions = async ({ apiKey, baseUrl, model }, props) => {
       messages: [
         {
           role: "system",
-          content: `你是中文口播与字幕编辑。输出严格 JSON。每个 narration 用换行分成多行短字幕，每行不超过 ${MAX_SUBTITLE_CHARS} 个汉字。禁止超长单行。`,
+          content: `你是中文口播与字幕编辑。输出严格 JSON。每个 narration 用换行分成多行短字幕；行内不要写逗号或句号；每行不超过 ${MAX_SUBTITLE_CHARS} 个汉字。`,
         },
         {
           role: "user",

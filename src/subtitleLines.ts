@@ -5,22 +5,29 @@
 export const MAX_SUBTITLE_CHARS = 16;
 export const HARD_SUBTITLE_CHARS = 22;
 
+/** Split on any of these — each piece becomes its own on-screen subtitle. */
+const SPLIT_PUNCT = /[，。！？、；：,.!?;:]+/u;
+const STRIP_PUNCT = /[，。！？、；：,.!?;:]+/gu;
+
 export const charLen = (text: string) => [...String(text || "")].length;
 
 const normalizeNarration = (raw: string) =>
   String(raw || "")
     .replace(/\r\n/g, "\n")
     .replace(/[ \t]+/g, " ")
-    .replace(/\n+/g, "。")
+    .replace(/\n+/g, "，")
     .replace(/\s*([，。！？、；：,.!?;:])\s*/g, "$1")
     .replace(/[.…]+/g, "。")
     .replace(/[!！]+/g, "！")
     .replace(/[?？]+/g, "？")
-    .replace(/。{2,}/g, "。")
     .trim();
 
-const stripTrailingPunct = (text: string) =>
-  text.replace(/[，。！？、；：,.!?;:]+$/u, "").trim();
+/** Display text: no commas / periods on screen. */
+export const stripSubtitlePunctuation = (text: string) =>
+  String(text || "")
+    .replace(STRIP_PUNCT, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 
 const isLeadIn = (text: string) =>
   charLen(text) <= 8 &&
@@ -31,7 +38,7 @@ const isLeadIn = (text: string) =>
 const isAuthorLike = (text: string) => /作者|@/.test(text);
 
 const forceBreakClause = (clause: string): string[] => {
-  const text = clause.trim();
+  const text = stripSubtitlePunctuation(clause);
   if (!text) {
     return [];
   }
@@ -43,7 +50,7 @@ const forceBreakClause = (clause: string): string[] => {
   const target = Math.min(MAX_SUBTITLE_CHARS, Math.ceil(chars.length / 2));
   let splitAt = target;
   for (let i = target; i >= Math.floor(target * 0.55); i -= 1) {
-    if ("的了在和与及到对把被让与或而".includes(chars[i] ?? "")) {
+    if ("的了在和与及到对把被让与或而 ".includes(chars[i] ?? "")) {
       splitAt = i + 1;
       break;
     }
@@ -54,43 +61,14 @@ const forceBreakClause = (clause: string): string[] => {
   return [...forceBreakClause(head), ...forceBreakClause(rest)].filter(Boolean);
 };
 
-const splitLongClause = (sentence: string): string[] => {
-  const body = stripTrailingPunct(sentence);
-  if (!body) {
-    return [];
-  }
-  if (charLen(body) <= MAX_SUBTITLE_CHARS) {
-    return [body];
-  }
-
-  const parts = body
-    .split(/(?<=[，、；;：:])/u)
-    .map((part) => stripTrailingPunct(part))
-    .filter(Boolean);
-
-  if (parts.length <= 1) {
-    return forceBreakClause(body);
-  }
-
-  const lines: string[] = [];
-  for (const part of parts) {
-    if (charLen(part) <= HARD_SUBTITLE_CHARS) {
-      lines.push(part);
-    } else {
-      lines.push(...forceBreakClause(part));
-    }
-  }
-  return lines;
-};
-
-/** Merge tiny lead-ins / pair short clauses for subtitle rhythm. */
+/** Only merge tiny lead-ins like「第一条」with the next title — never join with commas. */
 export const mergeSubtitleSegments = (segments: string[]): string[] => {
   const out: string[] = [];
   let index = 0;
 
   while (index < segments.length) {
-    const current = segments[index]?.trim() ?? "";
-    const next = segments[index + 1]?.trim() ?? "";
+    const current = stripSubtitlePunctuation(segments[index] ?? "");
+    const next = stripSubtitlePunctuation(segments[index + 1] ?? "");
 
     if (!current) {
       index += 1;
@@ -108,21 +86,11 @@ export const mergeSubtitleSegments = (segments: string[]): string[] => {
       continue;
     }
 
-    if (
-      next &&
-      !isLeadIn(next) &&
-      !isAuthorLike(current) &&
-      !isAuthorLike(next) &&
-      charLen(current) <= 12 &&
-      charLen(next) <= 12 &&
-      charLen(current) + 1 + charLen(next) <= HARD_SUBTITLE_CHARS + 2
-    ) {
-      out.push(`${current}，${next}`);
-      index += 2;
-      continue;
+    if (charLen(current) > HARD_SUBTITLE_CHARS) {
+      out.push(...forceBreakClause(current));
+    } else {
+      out.push(current);
     }
-
-    out.push(current);
     index += 1;
   }
 
@@ -135,17 +103,12 @@ export const splitSubtitleLines = (raw: string): string[] => {
     return [];
   }
 
-  const sentences = text
-    .split(/(?<=[。！？!?])/u)
-    .map((item) => item.trim())
+  const pieces = text
+    .split(SPLIT_PUNCT)
+    .map((item) => stripSubtitlePunctuation(item))
     .filter(Boolean);
 
-  const clauses: string[] = [];
-  for (const sentence of sentences.length ? sentences : [text]) {
-    clauses.push(...splitLongClause(sentence));
-  }
-
-  return mergeSubtitleSegments(clauses).filter(Boolean);
+  return mergeSubtitleSegments(pieces.length ? pieces : [stripSubtitlePunctuation(text)]);
 };
 
 export type ProvisionalCue = {
@@ -154,23 +117,12 @@ export type ProvisionalCue = {
   endMs: number;
 };
 
-const finishLineText = (line: string) => {
-  const trimmed = line.trim();
-  if (!trimmed) {
-    return "";
-  }
-  if (/[。！？!?]$/u.test(trimmed)) {
-    return trimmed;
-  }
-  return `${trimmed}。`;
-};
-
 /** One cue per subtitle line, timed by character weight. */
 export const buildProvisionalCues = (
   raw: string,
   durationMs: number,
 ): ProvisionalCue[] => {
-  const lines = splitSubtitleLines(raw).map(finishLineText).filter(Boolean);
+  const lines = splitSubtitleLines(raw);
   if (lines.length === 0) {
     return [];
   }
@@ -182,7 +134,9 @@ export const buildProvisionalCues = (
     const startMs = Math.round(cursor);
     cursor += (total * weights[index]) / totalWeight;
     const endMs =
-      index === lines.length - 1 ? total : Math.max(Math.round(cursor), startMs + 200);
+      index === lines.length - 1
+        ? total
+        : Math.max(Math.round(cursor), startMs + 200);
     return { text, startMs, endMs };
   });
 };
@@ -200,15 +154,14 @@ const normalizeCueChars = (value: string) =>
     .replace(/[。！？!?，、；;：:·．.]/g, "");
 
 /**
- * Build sequential single-line subtitle cues.
- * Prefers Azure word-boundary timing when available; otherwise character-weighted slices.
+ * Build sequential single-line subtitle cues (no punctuation on screen).
  */
 export const buildTimedSubtitleCues = (
   raw: string,
   durationMs: number,
   boundaries: WordBoundaryLike[] = [],
 ): ProvisionalCue[] => {
-  const lines = splitSubtitleLines(raw).map(finishLineText).filter(Boolean);
+  const lines = splitSubtitleLines(raw);
   if (lines.length === 0) {
     return [];
   }
@@ -278,7 +231,7 @@ export const buildTimedSubtitleCues = (
   return cues;
 };
 
-/** Ensure every cue is a single on-screen line (never a multi-line block). */
+/** Ensure every cue is a single on-screen line without punctuation. */
 export const ensureSingleLineCues = (
   cues: ProvisionalCue[] | undefined,
   fallbackRaw: string,
@@ -290,15 +243,12 @@ export const ensureSingleLineCues = (
 
   const expanded: ProvisionalCue[] = [];
   for (const cue of cues) {
-    const lines = String(cue.text || "")
-      .split(/\n+/)
-      .map((item) => item.trim())
-      .filter(Boolean);
+    const lines = splitSubtitleLines(String(cue.text || ""));
     if (lines.length <= 1) {
-      expanded.push({
-        ...cue,
-        text: finishLineText(lines[0] || String(cue.text || "")),
-      });
+      const text = stripSubtitlePunctuation(lines[0] || String(cue.text || ""));
+      if (text) {
+        expanded.push({ ...cue, text });
+      }
       continue;
     }
     const span = Math.max(cue.endMs - cue.startMs, lines.length * 200);
@@ -310,23 +260,34 @@ export const ensureSingleLineCues = (
           ? cue.endMs
           : Math.round(cue.startMs + (index + 1) * slice);
       expanded.push({
-        text: finishLineText(line),
+        text: line,
         startMs,
         endMs: Math.max(endMs, startMs + 160),
       });
     });
   }
-  return expanded;
+  return expanded.length > 0
+    ? expanded
+    : buildTimedSubtitleCues(fallbackRaw, durationMs);
+};
+
+/** Spoken form for TTS — join lines with periods for natural pauses. */
+export const narrationForSpeech = (raw: string): string => {
+  const lines = splitSubtitleLines(raw);
+  if (lines.length === 0) {
+    return "";
+  }
+  return `${lines.join("。")}。`;
 };
 
 /**
- * Format narration for script editor + TTS:
- * one short subtitle line per row, ending with 。
+ * Format narration for script editor:
+ * one subtitle line per row, no commas/periods shown.
  */
 export const optimizeNarrationForSubtitles = (raw: string): string => {
   const lines = splitSubtitleLines(raw);
   if (lines.length === 0) {
     return "";
   }
-  return lines.map(finishLineText).filter(Boolean).join("\n");
+  return lines.join("\n");
 };

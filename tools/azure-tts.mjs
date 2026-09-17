@@ -1,14 +1,11 @@
 import sdk from "microsoft-cognitiveservices-speech-sdk";
 import { writeFile } from "node:fs/promises";
 import {
-  HARD_SUBTITLE_CHARS,
-  MAX_SUBTITLE_CHARS,
   buildTimedSubtitleCues,
-  charLen,
+  narrationForSpeech,
 } from "./subtitle-lines.mjs";
 
 const DEFAULT_VOICE = "zh-CN-YunxiNeural";
-const SENTENCE_BOUNDARY = sdk.SpeechSynthesisBoundaryType?.Sentence ?? 1;
 
 const ticksToMs = (ticks) => Math.round(ticks / 10000);
 
@@ -25,78 +22,6 @@ export const getAzureSpeechConfig = () => {
   return { key, region, voice };
 };
 
-const aggregateWordBoundariesToCues = (boundaries, fullText, durationMs) => {
-  if (!fullText.trim()) {
-    return [];
-  }
-  if (boundaries.length === 0) {
-    return [{ text: fullText.trim(), startMs: 0, endMs: durationMs }];
-  }
-
-  const cues = [];
-  let buffer = "";
-  let bufferStartMs = boundaries[0]?.audioOffsetMs ?? 0;
-
-  const flush = (endMs) => {
-    const text = buffer.trim();
-    if (!text) {
-      return;
-    }
-    cues.push({
-      text: text.replace(/[，、；;：:]+$/u, "").trim() || text,
-      startMs: bufferStartMs,
-      endMs: Math.max(endMs, bufferStartMs + 1),
-    });
-    buffer = "";
-  };
-
-  for (const boundary of boundaries) {
-    if (boundary.boundaryType === SENTENCE_BOUNDARY && boundary.text.trim()) {
-      flush(boundary.audioOffsetMs + boundary.durationMs);
-      bufferStartMs = boundary.audioOffsetMs + boundary.durationMs;
-      continue;
-    }
-
-    buffer += boundary.text;
-    const trimmedBuffer = buffer.trim();
-    const punct = boundary.text.trim();
-    const endMs = boundary.audioOffsetMs + boundary.durationMs;
-
-    if (/[。！？!?]$/.test(punct)) {
-      flush(endMs);
-      bufferStartMs = endMs;
-      continue;
-    }
-
-    // Soft pause: split once the line is long enough for readable type.
-    if (
-      /[，、；;：:]$/.test(punct) &&
-      charLen(trimmedBuffer) >= Math.min(12, MAX_SUBTITLE_CHARS)
-    ) {
-      flush(endMs);
-      bufferStartMs = endMs;
-      continue;
-    }
-
-    // Hard cap so a long clause cannot stay on screen as tiny text.
-    if (charLen(trimmedBuffer) >= HARD_SUBTITLE_CHARS) {
-      flush(endMs);
-      bufferStartMs = endMs;
-    }
-  }
-
-  if (buffer.trim()) {
-    flush(durationMs);
-  }
-
-  if (cues.length === 0) {
-    return [{ text: fullText.trim(), startMs: 0, endMs: durationMs }];
-  }
-
-  cues[cues.length - 1].endMs = durationMs;
-  return cues;
-};
-
 export const synthesizeScene = async (text, outputPath) => {
   const narration = text.trim();
   if (!narration) {
@@ -106,6 +31,8 @@ export const synthesizeScene = async (text, outputPath) => {
       audioPath: null,
     };
   }
+
+  const speakText = narrationForSpeech(narration) || narration;
 
   const { key, region, voice } = getAzureSpeechConfig();
   const speechConfig = sdk.SpeechConfig.fromSubscription(key, region);
@@ -134,7 +61,7 @@ export const synthesizeScene = async (text, outputPath) => {
   try {
     const result = await new Promise((resolve, reject) => {
       synthesizer.speakTextAsync(
-        narration,
+        speakText,
         (speechResult) => {
           if (
             speechResult.reason === sdk.ResultReason.SynthesizingAudioCompleted
