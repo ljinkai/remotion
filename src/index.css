@@ -233,8 +233,8 @@ body {
   z-index: 11;
   flex: 1;
   min-width: 0;
-  max-width: 1180px;
-  padding: 40px 44px 44px;
+  max-width: 1480px;
+  padding: 48px 52px 52px;
   border-radius: calc(var(--radius) + 6px);
   background: rgba(0, 0, 0, 0.72);
   backdrop-filter: blur(14px);
@@ -267,10 +267,18 @@ body {
   opacity: 1;
 }
 
+.coverIssueLabel {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.78);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  line-height: 1;
+}
+
 .coverThemeBlock {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 16px;
   opacity: 1;
 }
 
@@ -279,10 +287,12 @@ body {
   max-width: 100%;
   color: #ffffff;
   font-weight: 950;
-  line-height: 1.08;
+  line-height: 1.12;
+  letter-spacing: -0.02em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  text-shadow: 0 6px 28px rgba(0, 0, 0, 0.35);
   opacity: 1;
 }
 
@@ -297,9 +307,9 @@ body {
 }
 
 .coverThemeSub {
-  color: #ffffff;
-  font-size: 42px;
-  font-weight: 900;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 44px;
+  font-weight: 800;
   opacity: 1;
 }
 
@@ -608,33 +618,64 @@ body {
 }
 
 .scene[data-aspect="portrait"] .coverMain {
+  position: relative;
   flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  gap: 36px;
-  padding: 120px 48px 24px;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 0;
+  /* Top title card only — leave mid/lower collage open */
+  padding: 108px 36px 280px;
 }
 
 .scene[data-aspect="portrait"] .coverBrandBlock {
+  flex: 0 0 auto;
+  width: 100%;
   max-width: 100%;
-  padding: 28px 28px 32px;
+  padding: 22px 24px 24px;
+  border-radius: 22px;
+  background: rgba(0, 0, 0, 0.78);
+  box-shadow:
+    0 18px 48px rgba(0, 0, 0, 0.4),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+.scene[data-aspect="portrait"] .coverBrandName {
+  margin-bottom: 10px;
+}
+
+.scene[data-aspect="portrait"] .coverBrandLine {
+  height: 4px;
+  margin-bottom: 14px;
+}
+
+.scene[data-aspect="portrait"] .coverThemeBlock {
+  gap: 10px;
 }
 
 .scene[data-aspect="portrait"] .coverThemeSub {
-  font-size: 28px;
+  font-size: 26px;
+  opacity: 0.9;
 }
 
 .scene[data-aspect="portrait"] .coverBadge {
-  align-self: flex-start;
-  max-width: 100%;
+  position: absolute;
+  right: 36px;
+  bottom: 168px;
+  align-self: auto;
+  max-width: min(72%, 420px);
+  margin-bottom: 0;
+  z-index: 12;
 }
 
 .scene[data-aspect="portrait"] .coverBackdropVeil {
+  /* Soft top wash only — don't darken the collage mid-frame */
   background: linear-gradient(
     180deg,
-    rgba(0, 0, 0, 0.18) 0%,
-    rgba(0, 0, 0, 0.06) 45%,
-    rgba(0, 0, 0, 0.22) 100%
+    rgba(0, 0, 0, 0.28) 0%,
+    rgba(0, 0, 0, 0.08) 18%,
+    rgba(0, 0, 0, 0) 36%,
+    rgba(0, 0, 0, 0) 72%,
+    rgba(0, 0, 0, 0.2) 100%
   );
 }
 

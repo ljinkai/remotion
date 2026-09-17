@@ -22,6 +22,7 @@ import {
   getVideoFormat,
   resolveAspect,
 } from "../src/videoFormats";
+import { buildXhsPublishCopy } from "../src/xhsCopy";
 import { CueTimelinePanel } from "./cue-timeline-panel";
 
 const savedMarkdown =
@@ -52,6 +53,7 @@ function App() {
   const [synthesizedProps, setSynthesizedProps] = useState(null);
   const [currentFrame, setCurrentFrame] = useState(0);
   const [editorTab, setEditorTab] = useState("markdown");
+  const [xhsDraft, setXhsDraft] = useState(null);
 
   const parsedProps = useMemo(
     () => parseMarkdownToVideo(markdown),
@@ -76,6 +78,22 @@ function App() {
     VIDEO_TEMPLATES.find((item) => item.id === templateId) ||
     VIDEO_TEMPLATES[0];
   const activeFormat = getVideoFormat(aspect);
+  const xhsCopy = useMemo(() => buildXhsPublishCopy(props), [props]);
+  const xhsView = xhsDraft ?? xhsCopy;
+
+  useEffect(() => {
+    setXhsDraft(null);
+  }, [markdown, props.issueNumber, props.coverTitle, props.cases?.length]);
+
+  const copyText = async (label, text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setError("");
+      setStatus(`已复制${label}`);
+    } catch {
+      setError(`复制${label}失败，请手动选中复制`);
+    }
+  };
 
   const selectTemplate = (id) => {
     const next = resolveTemplateId(id);
@@ -386,6 +404,15 @@ function App() {
           >
             逐字稿{hasScript ? "" : " · 未生成"}
           </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={editorTab === "xhs"}
+            className={`editorTab${editorTab === "xhs" ? " active" : ""}`}
+            onClick={() => setEditorTab("xhs")}
+          >
+            小红书文案
+          </button>
         </div>
 
         <div className="editorBody">
@@ -395,6 +422,94 @@ function App() {
               value={markdown}
               onChange={(event) => updateMarkdown(event.target.value)}
             />
+          ) : editorTab === "xhs" ? (
+            <section className="scriptPanel">
+              <h3>
+                小红书发布文案
+                <span className="meta"> · 可编辑后一键复制</span>
+              </h3>
+              <p className="scriptEmpty" style={{ marginBottom: 12 }}>
+                不用接口：复制后到小红书 App 粘贴即可。建议先切「竖屏」再生成
+                MP4。
+              </p>
+              <div className="scriptField">
+                <label>标题</label>
+                <textarea
+                  rows={2}
+                  value={xhsView.title}
+                  onChange={(event) =>
+                    setXhsDraft({ ...xhsView, title: event.target.value })
+                  }
+                />
+                <div className="copyRow">
+                  <button
+                    className="secondary"
+                    type="button"
+                    onClick={() => copyText("标题", xhsView.title)}
+                  >
+                    复制标题
+                  </button>
+                </div>
+              </div>
+              <div className="scriptField">
+                <label>正文</label>
+                <textarea
+                  rows={10}
+                  value={xhsView.body}
+                  onChange={(event) =>
+                    setXhsDraft({ ...xhsView, body: event.target.value })
+                  }
+                />
+                <div className="copyRow">
+                  <button
+                    className="secondary"
+                    type="button"
+                    onClick={() => copyText("正文", xhsView.body)}
+                  >
+                    复制正文
+                  </button>
+                </div>
+              </div>
+              <div className="scriptField">
+                <label>话题标签</label>
+                <textarea
+                  rows={3}
+                  value={xhsView.tags}
+                  onChange={(event) =>
+                    setXhsDraft({ ...xhsView, tags: event.target.value })
+                  }
+                />
+                <div className="copyRow">
+                  <button
+                    className="secondary"
+                    type="button"
+                    onClick={() => copyText("话题", xhsView.tags)}
+                  >
+                    复制话题
+                  </button>
+                </div>
+              </div>
+              <div className="copyRow" style={{ marginTop: 4 }}>
+                <button
+                  type="button"
+                  onClick={() =>
+                    copyText(
+                      "全文",
+                      `${xhsView.title}\n\n${xhsView.body}\n\n${xhsView.tags}`,
+                    )
+                  }
+                >
+                  一键复制全文
+                </button>
+                <button
+                  className="secondary"
+                  type="button"
+                  onClick={() => setXhsDraft(null)}
+                >
+                  重置为自动文案
+                </button>
+              </div>
+            </section>
           ) : script ? (
             <section className="scriptPanel">
               <h3>
