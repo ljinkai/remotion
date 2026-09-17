@@ -25,6 +25,10 @@ import {
 import { ensureSingleLineCues } from "./subtitleLines";
 import { getVideoTemplate } from "./videoTemplates";
 import { getVideoFormat } from "./videoFormats";
+import {
+  FIXED_CLOSING_NARRATION,
+  splitClosingSummaryAndCta,
+} from "./narrationScript";
 
 const calculateMetadata: CalculateMetadataFunction<WeeklyVideoProps> = ({
   props,
@@ -482,7 +486,10 @@ const ClosingScene: React.FC<{
 }> = ({ video, portrait = false }) => {
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
-  const closingSize = fitCoverTitleSize(video.closingSubtitle, portrait);
+  const { summary, cta } = splitClosingSummaryAndCta(video.closingSubtitle);
+  const summaryText = summary || video.closingSubtitle;
+  const ctaText = cta || FIXED_CLOSING_NARRATION;
+  const closingSize = fitCoverTitleSize(summaryText, portrait);
 
   return (
     <AbsoluteFill className="closingSceneLayout">
@@ -490,7 +497,7 @@ const ClosingScene: React.FC<{
         className="closingScene"
         style={{ opacity: fade(frame, 0, durationInFrames) }}
       >
-        <p>{video.closingTitle}</p>
+        <p className="closingLabel">{video.closingTitle}</p>
         <h2
           style={{
             fontSize: Math.max(
@@ -499,8 +506,14 @@ const ClosingScene: React.FC<{
             ),
           }}
         >
-          {video.closingSubtitle}
+          {summaryText}
         </h2>
+        <p
+          className="closingCta"
+          style={portrait ? { fontSize: 26 } : undefined}
+        >
+          {ctaText}
+        </p>
       </section>
       <SceneSubtitles
         cues={video.closingCues}

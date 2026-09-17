@@ -2,6 +2,9 @@ import type { WeeklyVideoProps } from "./videoData";
 import { normalizeVideoProps } from "./videoData";
 import { optimizeNarrationForSubtitles } from "./subtitleLines";
 
+/** Fixed CTA appended after the thematic「一句话总结」. */
+export const FIXED_CLOSING_NARRATION = "觉得有用就关注一下，我们下周见！";
+
 export type NarrationScriptCase = {
   index: string;
   title: string;
@@ -13,6 +16,47 @@ export type NarrationScript = {
   cases: NarrationScriptCase[];
   closing: string;
   source: "ai" | "manual" | "markdown";
+};
+
+/** Keep the summary, then append the fixed CTA if missing. */
+export const appendFixedClosingCta = (closing: string) => {
+  const base = String(closing || "").trim();
+  const cta = FIXED_CLOSING_NARRATION;
+  if (!base) {
+    return cta;
+  }
+  if (base.includes(cta) || base.includes("我们下周见")) {
+    return base;
+  }
+  return `${base}\n${cta}`;
+};
+
+/** Split closing text into thematic summary + fixed CTA for layout. */
+export const splitClosingSummaryAndCta = (closing: string) => {
+  const full = String(closing || "").trim();
+  if (!full) {
+    return { summary: "", cta: FIXED_CLOSING_NARRATION };
+  }
+
+  const ctaIndex = full.indexOf(FIXED_CLOSING_NARRATION);
+  if (ctaIndex >= 0) {
+    return {
+      summary: full.slice(0, ctaIndex).trim(),
+      cta: FIXED_CLOSING_NARRATION,
+    };
+  }
+
+  const softIndex = full.indexOf("我们下周见");
+  if (softIndex >= 0) {
+    // Prefer splitting at the start of the CTA sentence when possible.
+    const lineStart = full.lastIndexOf("\n", softIndex);
+    const cut = lineStart >= 0 ? lineStart : softIndex;
+    const summary = full.slice(0, cut).trim();
+    const cta = full.slice(cut).trim() || FIXED_CLOSING_NARRATION;
+    return { summary, cta };
+  }
+
+  return { summary: full, cta: "" };
 };
 
 export const buildScriptFromProps = (
@@ -27,7 +71,7 @@ export const buildScriptFromProps = (
       title: item.title,
       narration: item.subtitle.trim(),
     })),
-    closing: video.closingSubtitle.trim(),
+    closing: appendFixedClosingCta(video.closingSubtitle),
     source,
   };
 };
@@ -51,6 +95,8 @@ export const applyNarrationScript = (
     };
   });
 
+  const closing = appendFixedClosingCta(script.closing);
+
   return {
     ...video,
     introSubtitle:
@@ -58,9 +104,7 @@ export const applyNarrationScript = (
       script.intro.trim() ||
       video.introSubtitle,
     closingSubtitle:
-      optimizeNarrationForSubtitles(script.closing) ||
-      script.closing.trim() ||
-      video.closingSubtitle,
+      optimizeNarrationForSubtitles(closing) || closing,
     cases,
   };
 };

@@ -3,6 +3,20 @@ import {
   optimizeNarrationForSubtitles,
 } from "./subtitle-lines.mjs";
 
+/** Fixed CTA appended after the thematic「一句话总结」. */
+const FIXED_CLOSING_NARRATION = "觉得有用就关注一下，我们下周见！";
+
+const appendFixedClosingCta = (closing) => {
+  const base = String(closing || "").trim();
+  if (!base) {
+    return FIXED_CLOSING_NARRATION;
+  }
+  if (base.includes(FIXED_CLOSING_NARRATION) || base.includes("我们下周见")) {
+    return base;
+  }
+  return `${base}\n${FIXED_CLOSING_NARRATION}`;
+};
+
 const DEFAULT_BASE_URL =
   "https://dashscope-intl.aliyuncs.com/compatible-mode/v1";
 const DEFAULT_MODEL = "qwen-plus";
@@ -52,9 +66,14 @@ const normalizeScriptPayload = (payload, props) => {
   }
 
   const intro = optimizeNarrationForSubtitles(payload.intro ?? "");
-  const closing = optimizeNarrationForSubtitles(payload.closing ?? "");
-  if (!intro || !closing) {
-    throw new Error("逐字稿缺少 intro 或 closing");
+  if (!intro) {
+    throw new Error("逐字稿缺少 intro");
+  }
+  const closingRaw = appendFixedClosingCta(payload.closing ?? "");
+  const closing =
+    optimizeNarrationForSubtitles(closingRaw) || closingRaw;
+  if (!closing) {
+    throw new Error("逐字稿缺少 closing");
   }
 
   const rawCases = Array.isArray(payload.cases) ? payload.cases : [];
@@ -106,6 +125,7 @@ const buildUserPrompt = (props) => {
 - 逐字稿必须**覆盖 markdownBody / introMarkdown / closingMarkdown 里的主要信息与观点**，不能只摘要成两三句。
 - 在保留原意的前提下口语化改写；不要编造 MD 中没有的事实、数据或产品名。
 - 短句分行上屏，但内容要写够。
+- closing 先写本期「一句话总结」的观点总结；系统会再自动追加固定结束语：${FIXED_CLOSING_NARRATION}
 
 要求：
 1. 只输出一个 JSON 对象，不要 Markdown，不要解释。
@@ -115,7 +135,7 @@ const buildUserPrompt = (props) => {
 5. 【字幕格式】每一行 ≤${MAX_SUBTITLE_CHARS} 个汉字；遇到逗号、句号、顿号、分号都拆成新行；行内不要出现，。！？、；：。
 6. narration / intro / closing 内部用换行分隔每一行字幕。
 7. 「第一条」「接下来」等短衔接可与下一短句同一行，中间用空格。
-8. 【篇幅】每个案例 narration 至少 8 行、建议 10～16 行；intro 至少 4 行；closing 至少 4 行。把 markdownBody 里的要点拆成多行口播，不要过度压缩。
+8. 【篇幅】每个案例 narration 至少 8 行、建议 10～16 行；intro 至少 4 行；closing 写 2～4 行本期总结即可（不要写关注/下周见，系统会追加）。把 markdownBody 里的要点拆成多行口播，不要过度压缩。
 9. 正确示例（注意：只是格式示例，真实内容要以输入的 markdownBody 为准写满）：
    第一条 小众产品重启记
    作者是@farrux_hewson
@@ -135,6 +155,7 @@ ${JSON.stringify(
     cases,
     closingShort: props.closingSubtitle,
     closingMarkdown: props.closingSourceBody || props.closingSubtitle || "",
+    fixedClosingCta: FIXED_CLOSING_NARRATION,
   },
   null,
   2,

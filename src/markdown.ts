@@ -5,6 +5,7 @@ import {
   type WeeklyVideoProps,
 } from "./videoData";
 import type { NarrationScript } from "./narrationScript";
+import { appendFixedClosingCta } from "./narrationScript";
 import { optimizeNarrationForSubtitles } from "./subtitleLines";
 
 export const sampleMarkdown = `---
@@ -258,11 +259,12 @@ export const parseMarkdownToVideo = (markdown: string): WeeklyVideoProps => {
     );
   const closingBody = closing ? closing.body : [];
   const closingText = bodyText(closingBody);
-  const closingNarration =
+  const closingNarration = appendFixedClosingCta(
     fieldValue(closingBody, ["旁白", "narration"]) ||
-    (closing
-      ? firstSentence(closingText, defaultVideoProps.closingSubtitle)
-      : defaultVideoProps.closingSubtitle);
+      (closing
+        ? firstSentence(closingText, defaultVideoProps.closingSubtitle)
+        : defaultVideoProps.closingSubtitle),
+  );
 
   return {
     issueNumber: parseIssueNumber(title, meta),
@@ -325,7 +327,9 @@ export const tryBuildScriptFromMarkdown = (
   return {
     intro: optimizeNarrationForSubtitles(introNarration),
     cases,
-    closing: optimizeNarrationForSubtitles(closingNarration),
+    closing: optimizeNarrationForSubtitles(
+      appendFixedClosingCta(closingNarration),
+    ),
     source: "markdown",
   };
 };

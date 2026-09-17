@@ -310,7 +310,7 @@ body {
 }
 
 .coverTitle p,
-.closingScene p {
+.closingLabel {
   margin: 0 0 22px;
   color: var(--accent);
   font-size: 34px;
@@ -567,6 +567,23 @@ body {
   overflow-wrap: anywhere;
 }
 
+.closingCta {
+  max-width: 1200px;
+  margin: 56px 0 0;
+  color: var(--fg-muted);
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1.45;
+  letter-spacing: 0.01em;
+  opacity: 0.72;
+}
+
+.scene[data-aspect="portrait"] .closingCta {
+  margin-top: 40px;
+  font-size: 26px;
+  opacity: 0.68;
+}
+
 /* —— Portrait / mobile 9:16 —— */
 .scene[data-aspect="portrait"] .header {
   left: 36px;
@@ -677,7 +694,7 @@ body {
   max-width: 100%;
 }
 
-.scene[data-aspect="portrait"] .closingScene p {
+.scene[data-aspect="portrait"] .closingLabel {
   font-size: 26px;
 }
 
