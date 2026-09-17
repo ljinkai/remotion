@@ -174,7 +174,10 @@ const runOneJob = async (root, jobId) => {
         throw new Error("skip_ai_script 已开启，但 Markdown 旁白不完整");
       }
     } else {
-      script = await generateNarrationScript(props);
+      script = await generateNarrationScript(props, {
+        markdown: job.markdown,
+        root,
+      });
     }
     props = runtime.applyNarrationScript(props, script);
     const options = normalizeRenderJobOptions(job.options);

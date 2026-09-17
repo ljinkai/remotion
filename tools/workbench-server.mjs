@@ -647,7 +647,10 @@ const server = createServer(async (req, res) => {
         sendJson(res, 400, { error: "props.cases 不能为空" });
         return;
       }
-      const script = await generateNarrationScript(body.props);
+      const script = await generateNarrationScript(body.props, {
+        markdown: body.markdown,
+        root,
+      });
       sendJson(res, 200, { script });
       return;
     }

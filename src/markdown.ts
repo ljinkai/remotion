@@ -242,6 +242,7 @@ export const parseMarkdownToVideo = (markdown: string): WeeklyVideoProps => {
       image: firstImage(section.body),
       fallback,
       subtitle: narration,
+      sourceBody: text || undefined,
       color: CASE_COLORS[index % CASE_COLORS.length],
     };
   });
@@ -256,10 +257,11 @@ export const parseMarkdownToVideo = (markdown: string): WeeklyVideoProps => {
       `这期${defaultVideoProps.headerTitle}，主线是${coverTitle}。`,
     );
   const closingBody = closing ? closing.body : [];
+  const closingText = bodyText(closingBody);
   const closingNarration =
     fieldValue(closingBody, ["旁白", "narration"]) ||
     (closing
-      ? firstSentence(bodyText(closingBody), defaultVideoProps.closingSubtitle)
+      ? firstSentence(closingText, defaultVideoProps.closingSubtitle)
       : defaultVideoProps.closingSubtitle);
 
   return {
@@ -274,8 +276,10 @@ export const parseMarkdownToVideo = (markdown: string): WeeklyVideoProps => {
       cases.find((item) => item.metric !== "精选")?.metric ||
       defaultVideoProps.coverBadge,
     introSubtitle: introNarration,
+    introSourceBody: introText || undefined,
     closingTitle: closing?.title || defaultVideoProps.closingTitle,
     closingSubtitle: closingNarration,
+    closingSourceBody: closingText || undefined,
     ticker: meta.ticker || defaultVideoProps.ticker,
     audioSrc: meta.audio || "",
     cases: cases.length > 0 ? cases : defaultVideoProps.cases,

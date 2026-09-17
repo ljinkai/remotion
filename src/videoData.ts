@@ -16,6 +16,8 @@ export type WeeklyCase = {
   image: string;
   fallback: string;
   subtitle: string;
+  /** Full Markdown body for this case — used when generating 逐字稿 */
+  sourceBody?: string;
   color: string;
   durationMs?: number;
   audioSrc?: string;
@@ -29,8 +31,12 @@ export type WeeklyVideoProps = {
   coverSubtitle: string;
   coverBadge: string;
   introSubtitle: string;
+  /** Full intro Markdown body for 逐字稿 */
+  introSourceBody?: string;
   closingTitle: string;
   closingSubtitle: string;
+  /** Full closing Markdown body for 逐字稿 */
+  closingSourceBody?: string;
   ticker: string;
   /** Visual template id — see videoTemplates.ts */
   templateId?: string;
@@ -200,11 +206,19 @@ export const normalizeVideoProps = (
     ),
     coverBadge: clean(source.coverBadge, defaultVideoProps.coverBadge),
     introSubtitle: clean(source.introSubtitle, defaultVideoProps.introSubtitle),
+    introSourceBody:
+      typeof source.introSourceBody === "string"
+        ? source.introSourceBody.trim() || undefined
+        : undefined,
     closingTitle: clean(source.closingTitle, defaultVideoProps.closingTitle),
     closingSubtitle: clean(
       source.closingSubtitle,
       defaultVideoProps.closingSubtitle,
     ),
+    closingSourceBody:
+      typeof source.closingSourceBody === "string"
+        ? source.closingSourceBody.trim() || undefined
+        : undefined,
     ticker: clean(source.ticker, defaultVideoProps.ticker),
     templateId: resolveTemplateId(source.templateId),
     aspect: resolveAspect(source.aspect),
@@ -242,6 +256,10 @@ export const normalizeVideoProps = (
       image: clean(item.image, ""),
       fallback: clean(item.fallback, item.title || `条目 ${index + 1}`),
       subtitle: clean(item.subtitle, item.title || `第 ${index + 1} 条内容`),
+      sourceBody:
+        typeof item.sourceBody === "string"
+          ? item.sourceBody.trim() || undefined
+          : undefined,
       color: clean(item.color, CASE_COLORS[index % CASE_COLORS.length]),
       durationMs:
         typeof item.durationMs === "number"

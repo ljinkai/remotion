@@ -175,7 +175,10 @@ function App() {
       const response = await fetch("/api/script", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ props: parsedProps }),
+        body: JSON.stringify({
+          props: parsedProps,
+          markdown,
+        }),
       });
       const body = await response.json();
       if (!response.ok) {
