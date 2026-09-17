@@ -197,10 +197,19 @@ export const normalizeVideoProps = (
       ? source.cases
       : defaultVideoProps.cases;
 
+  const rawCover =
+    typeof source.coverTitle === "string" ? source.coverTitle.trim() : "";
+  const headerTitle = clean(source.headerTitle, defaultVideoProps.headerTitle);
+  const coverTitle = rawCover
+    ? rawCover
+    : source.coverTitle === undefined
+      ? defaultVideoProps.coverTitle
+      : "";
+
   return {
     issueNumber: clean(source.issueNumber, defaultVideoProps.issueNumber),
-    headerTitle: clean(source.headerTitle, defaultVideoProps.headerTitle),
-    coverTitle: clean(source.coverTitle, defaultVideoProps.coverTitle),
+    headerTitle,
+    coverTitle,
     coverSubtitle: clean(
       source.coverSubtitle,
       `${cases.length} 个独立开发精选`,

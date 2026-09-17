@@ -202,15 +202,38 @@ const parseIssueNumber = (title: string, meta: Record<string, string>) => {
   return match ? match[1] : defaultVideoProps.issueNumber;
 };
 
+const stripIssueParen = (text: string) =>
+  String(text || "")
+    .replace(/[（(]\s*第\s*\d+\s*期\s*[）)]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const isBrandLikeTitle = (text: string, headerTitle: string) => {
+  const cleaned = stripIssueParen(text);
+  if (!cleaned) {
+    return true;
+  }
+  return (
+    cleaned === headerTitle ||
+    cleaned === "独立开发变现周刊" ||
+    cleaned === "独立开发周刊"
+  );
+};
+
+/** Theme line under the issue headline — never the brand/issue title itself. */
 const parseCoverTitle = (title: string, meta: Record<string, string>) => {
-  if (meta.theme) {
-    return meta.theme;
+  const headerTitle = meta.header || defaultVideoProps.headerTitle;
+  if (meta.theme && !isBrandLikeTitle(meta.theme, headerTitle)) {
+    return meta.theme.trim();
   }
   const parts = title.split(/[：:]/);
   if (parts.length > 1) {
-    return parts.slice(1).join("：").trim();
+    const theme = parts.slice(1).join("：").trim();
+    if (theme && !isBrandLikeTitle(theme, headerTitle)) {
+      return theme;
+    }
   }
-  return title || defaultVideoProps.coverTitle;
+  return "";
 };
 
 const isClosingSection = (title: string) =>

@@ -87,14 +87,16 @@ export const fitCoverTitleSize = (title: string, portrait = false) => {
     size = 132;
   } else if (len <= 10) {
     size = 104;
-  } else if (len <= 16) {
-    size = 84;
+  } else if (len <= 14) {
+    size = 72;
+  } else if (len <= 18) {
+    size = 58;
   } else if (len <= 24) {
-    size = 68;
+    size = 50;
   } else {
-    size = 56;
+    size = 44;
   }
-  return portrait ? Math.round(size * 0.62) : size;
+  return portrait ? Math.round(size * 0.72) : size;
 };
 
 /** Case meta title — keeps strip height stable. */
@@ -301,8 +303,19 @@ const CoverScene: React.FC<{
   portrait?: boolean;
 }> = ({ video, portrait = false }) => {
   const brandSize = portrait ? 28 : 36;
-  const issueSize = portrait ? 72 : 110;
-  const themeSize = fitCoverTitleSize(video.coverTitle, portrait);
+  const issueHeadline = `${video.headerTitle}（第${video.issueNumber}期）`;
+  const titleSize = fitCoverTitleSize(issueHeadline, portrait);
+  const rawTheme = video.coverTitle.trim();
+  const themeTitle =
+    rawTheme &&
+    rawTheme !== issueHeadline &&
+    stripIssueParen(rawTheme) !== video.headerTitle
+      ? rawTheme
+      : "";
+  const themeSize = fitCoverTitleSize(
+    themeTitle.length > 0 ? themeTitle : "精选",
+    portrait,
+  );
 
   return (
     <AbsoluteFill className="coverSceneLayout">
@@ -317,13 +330,23 @@ const CoverScene: React.FC<{
               className="coverBrandLine"
               style={{ width: portrait ? 160 : 220 }}
             />
-            <h1 className="coverIssueNumber" style={{ fontSize: issueSize }}>
-              第{video.issueNumber}期
-            </h1>
             <div className="coverThemeBlock">
-              <h2 className="coverThemeTitle" style={{ fontSize: themeSize }}>
-                {video.coverTitle}
-              </h2>
+              <h1 className="coverThemeTitle" style={{ fontSize: titleSize }}>
+                {issueHeadline}
+              </h1>
+              {themeTitle ? (
+                <h2
+                  className="coverThemeHook"
+                  style={{
+                    fontSize: Math.max(
+                      portrait ? 32 : 40,
+                      Math.min(portrait ? 52 : 68, themeSize),
+                    ),
+                  }}
+                >
+                  {themeTitle}
+                </h2>
+              ) : null}
               <span
                 className="coverThemeSub"
                 style={portrait ? { fontSize: 26 } : undefined}
@@ -354,6 +377,12 @@ const CoverScene: React.FC<{
     </AbsoluteFill>
   );
 };
+
+const stripIssueParen = (text: string) =>
+  String(text || "")
+    .replace(/[（(]\s*第\s*\d+\s*期\s*[）)]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 
 type ImageShape = "unknown" | "landscape" | "portrait";
 

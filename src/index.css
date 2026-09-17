@@ -166,8 +166,8 @@ body {
   position: absolute;
   overflow: hidden;
   border-radius: calc(var(--radius) + 4px);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   background: var(--stage);
 }
 
@@ -176,25 +176,25 @@ body {
   height: 100%;
   object-fit: cover;
   object-position: center;
-  filter: saturate(0.92) brightness(0.42) contrast(1.05);
+  filter: saturate(1.05) brightness(0.92) contrast(1.04);
   transform-origin: center;
 }
 
 .coverBackdropVeil {
   z-index: 2;
+  /* Soft left-to-right wash — just a hint of black for text contrast */
   background: linear-gradient(
-    100deg,
-    #000 0%,
-    #000 40%,
-    rgba(0, 0, 0, 0.82) 58%,
-    rgba(0, 0, 0, 0.35) 78%,
-    rgba(0, 0, 0, 0.2) 100%
+    105deg,
+    rgba(0, 0, 0, 0.28) 0%,
+    rgba(0, 0, 0, 0.12) 32%,
+    rgba(0, 0, 0, 0.04) 58%,
+    rgba(0, 0, 0, 0) 100%
   );
 }
 
 .coverBackdropGrain {
   z-index: 3;
-  opacity: 0.12;
+  opacity: 0.06;
   mix-blend-mode: soft-light;
   background-image:
     linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
@@ -234,12 +234,13 @@ body {
   flex: 1;
   min-width: 0;
   max-width: 1180px;
-  padding: 36px 40px 40px;
+  padding: 40px 44px 44px;
   border-radius: calc(var(--radius) + 6px);
-  background: #000;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(14px);
   box-shadow:
-    0 24px 64px rgba(0, 0, 0, 0.75),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+    0 24px 64px rgba(0, 0, 0, 0.45),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.12);
 }
 
 .coverBrandName {
@@ -269,7 +270,7 @@ body {
 .coverThemeBlock {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 18px;
   opacity: 1;
 }
 
@@ -279,8 +280,20 @@ body {
   color: #ffffff;
   font-weight: 950;
   line-height: 1.08;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   opacity: 1;
+}
+
+.coverThemeHook {
+  margin: 0;
+  max-width: 100%;
+  color: #ffffff;
+  font-weight: 900;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+  opacity: 0.96;
 }
 
 .coverThemeSub {
@@ -619,9 +632,9 @@ body {
 .scene[data-aspect="portrait"] .coverBackdropVeil {
   background: linear-gradient(
     180deg,
-    #000 0%,
-    #000 55%,
-    rgba(0, 0, 0, 0.88) 100%
+    rgba(0, 0, 0, 0.18) 0%,
+    rgba(0, 0, 0, 0.06) 45%,
+    rgba(0, 0, 0, 0.22) 100%
   );
 }
 
