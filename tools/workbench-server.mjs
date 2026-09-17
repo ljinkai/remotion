@@ -9,6 +9,13 @@ import esbuild from "esbuild";
 import { synthesizeVideoProps } from "./synthesize-props.mjs";
 import { embedLocalAudioAsDataUrls } from "./embed-audio-data-urls.mjs";
 import { generateNarrationScript } from "./script-llm.mjs";
+import { getAzureSpeechConfig, synthesizeScene } from "./azure-tts.mjs";
+import {
+  DEFAULT_AZURE_VOICE,
+  formatVoiceLabel,
+  listChineseVoices,
+  resolveVoiceId,
+} from "./azure-voices.mjs";
 import { createQueuedJob, publicJobView, readJob } from "./render-job-store.mjs";
 import { enqueueRenderJob } from "./render-job-worker.mjs";
 import { normalizeRenderJobOptions } from "./render-job-options.mjs";
@@ -271,6 +278,17 @@ const renderWorkbenchHtml = () => `<!doctype html>
       }
       .toolbarActions { display: flex; flex-wrap: wrap; gap: 8px; }
       .toolbarActions button { padding: 7px 12px; font-size: 13px; }
+      .voiceSelect {
+        max-width: min(320px, 42vw);
+        padding: 6px 8px;
+        border: 1px solid #cfd8e3;
+        border-radius: 7px;
+        background: #fff;
+        color: #17202a;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .voicePreviewBtn { padding: 6px 10px; font-size: 12px; }
       .stage {
         border-radius: 8px;
         overflow: hidden;
@@ -637,6 +655,64 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "GET" && pathname === "/api/voices") {
+      try {
+        let credentials = {};
+        try {
+          credentials = getAzureSpeechConfig();
+        } catch {
+          // curated fallback when Azure env is missing
+        }
+        const result = await listChineseVoices(credentials);
+        sendJson(res, 200, {
+          defaultVoice: DEFAULT_AZURE_VOICE,
+          source: result.source,
+          voices: result.voices.map((voice) => ({
+            ...voice,
+            label: formatVoiceLabel(voice),
+          })),
+        });
+      } catch (error) {
+        sendJson(res, 500, {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+      return;
+    }
+
+    if (req.method === "POST" && pathname === "/api/voice-preview") {
+      const body = await readJson(req);
+      const voice = resolveVoiceId(body.voice, DEFAULT_AZURE_VOICE);
+      const text =
+        typeof body.text === "string" && body.text.trim()
+          ? body.text.trim().slice(0, 120)
+          : "你好，我是独立开发变现周刊的旁白音色，欢迎收听本期精选。";
+      const previewDir = path.join(tmpDir, "voice-preview");
+      await mkdir(previewDir, { recursive: true });
+      const safeVoice = voice.replace(/[^a-zA-Z0-9_-]/g, "_");
+      const outputPath = path.join(previewDir, `${safeVoice}.wav`);
+      try {
+        const result = await synthesizeScene(text, outputPath, { voice });
+        if (!result.audioPath) {
+          sendJson(res, 500, { error: "试听合成失败：无音频输出" });
+          return;
+        }
+        const audio = await readFile(result.audioPath);
+        res.writeHead(200, {
+          "content-type": "audio/wav",
+          "content-length": audio.length,
+          "cache-control": "no-store",
+          "x-voice-id": voice,
+        });
+        res.end(audio);
+      } catch (error) {
+        sendJson(res, 500, {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+      return;
+    }
+
     if (req.method === "POST" && pathname === "/api/script") {
       const body = await readJson(req);
       if (!body.props || typeof body.props !== "object") {
@@ -661,7 +737,8 @@ const server = createServer(async (req, res) => {
         sendJson(res, 400, { error: "缺少 props" });
         return;
       }
-      const result = await synthesizeVideoProps(body.props, { root });
+      const voice = resolveVoiceId(body.voice, DEFAULT_AZURE_VOICE);
+      const result = await synthesizeVideoProps(body.props, { root, voice });
       sendJson(res, 200, result);
       return;
     }

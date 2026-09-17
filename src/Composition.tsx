@@ -181,8 +181,9 @@ const Header: React.FC<{ video: WeeklyVideoProps }> = ({ video }) => {
 
   return (
     <div className="header">
-      <span>{video.headerTitle}</span>
-      <strong>{video.issueNumber}</strong>
+      <span>
+        {video.headerTitle} ezindie.com
+      </span>
       <div className="progressTrack">
         <div className="progressFill" style={{ width: `${progress}%` }} />
       </div>

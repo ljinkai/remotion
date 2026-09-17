@@ -81,7 +81,7 @@ export const defaultVideoProps: WeeklyVideoProps = {
   issueNumber: "156",
   headerTitle: "独立开发变现周刊",
   coverTitle: "单渠道突破法",
-  coverSubtitle: "5 个独立开发案例",
+  coverSubtitle: "5 个独立开发精选",
   coverBadge: "400万美元年收",
   introSubtitle: "这期独立开发变现周刊，主线是单渠道突破法。",
   closingTitle: "一句话总结",
@@ -202,7 +202,7 @@ export const normalizeVideoProps = (
     coverTitle: clean(source.coverTitle, defaultVideoProps.coverTitle),
     coverSubtitle: clean(
       source.coverSubtitle,
-      `${cases.length} 个独立开发案例`,
+      `${cases.length} 个独立开发精选`,
     ),
     coverBadge: clean(source.coverBadge, defaultVideoProps.coverBadge),
     introSubtitle: clean(source.introSubtitle, defaultVideoProps.introSubtitle),
@@ -423,7 +423,7 @@ export const buildCueTimeline = (
       }
     } else if (segment.caseIndex !== undefined) {
       const item = video.cases[segment.caseIndex];
-      sceneLabel = `案例 ${item.index} · ${item.title}`;
+      sceneLabel = `精选 ${item.index} · ${item.title}`;
       cues = item.cues;
       fallbackText = item.subtitle;
       if (item.durationMs) {

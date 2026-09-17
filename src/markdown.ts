@@ -270,7 +270,7 @@ export const parseMarkdownToVideo = (markdown: string): WeeklyVideoProps => {
     coverTitle,
     coverSubtitle:
       meta.subtitle ||
-      `${cases.length || defaultVideoProps.cases.length} 个独立开发案例`,
+      `${cases.length || defaultVideoProps.cases.length} 个独立开发精选`,
     coverBadge:
       meta.badge ||
       cases.find((item) => item.metric !== "精选")?.metric ||

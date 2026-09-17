@@ -1,19 +1,16 @@
 import { mkdir, cp } from "node:fs/promises";
 import path from "node:path";
 import { getAzureSpeechConfig, synthesizeScene } from "./azure-tts.mjs";
+import { DEFAULT_AZURE_VOICE, resolveVoiceId } from "./azure-voices.mjs";
 import { readTtsCache, writeTtsCache } from "./tts-cache.mjs";
 
 const SCENE_PADDING_MS = 300;
 const SILENT_DURATION_MS = 2000;
-const DEFAULT_VOICE = "zh-CN-YunxiNeural";
 
 const synthId = () =>
   new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
 
-const resolveVoice = () =>
-  process.env.AZURE_SPEECH_VOICE?.trim() || DEFAULT_VOICE;
-
-export const synthesizeVideoProps = async (props, { root }) => {
+export const synthesizeVideoProps = async (props, { root, voice: voiceOpt } = {}) => {
   const id = synthId();
   const workDir = path.join(root, ".workbench", `synth-${id}`);
   // Use public/generated (no leading dot) so Remotion staticFile / public copy
@@ -22,7 +19,10 @@ export const synthesizeVideoProps = async (props, { root }) => {
   await mkdir(workDir, { recursive: true });
   await mkdir(publicDir, { recursive: true });
 
-  const voice = resolveVoice();
+  const voice = resolveVoiceId(
+    voiceOpt || process.env.AZURE_SPEECH_VOICE,
+    DEFAULT_AZURE_VOICE,
+  );
 
   const enriched = structuredClone(props);
   enriched.useSynthesizedTimeline = true;
@@ -95,13 +95,13 @@ export const synthesizeVideoProps = async (props, { root }) => {
 
     if (!ensuredAzure) {
       // Validate credentials only when we actually need Azure.
-      getAzureSpeechConfig();
+      getAzureSpeechConfig({ voice });
       ensuredAzure = true;
     }
 
     cacheMisses += 1;
     const workPath = path.join(workDir, scene.filename);
-    const result = await synthesizeScene(scene.text, workPath);
+    const result = await synthesizeScene(scene.text, workPath, { voice });
     if (result.audioPath) {
       const stored = await writeTtsCache(root, narration, voice, {
         durationMs: result.durationMs,

@@ -30,12 +30,19 @@ const savedTemplate = resolveTemplateId(
   localStorage.getItem("remotion-template"),
 );
 const savedAspect = resolveAspect(localStorage.getItem("remotion-aspect"));
+const savedVoice =
+  localStorage.getItem("remotion-voice") || "zh-CN-YunxiNeural";
 
 function App() {
   const playerRef = useRef(null);
+  const previewAudioRef = useRef(null);
   const [markdown, setMarkdown] = useState(savedMarkdown);
   const [templateId, setTemplateId] = useState(savedTemplate);
   const [aspect, setAspect] = useState(savedAspect);
+  const [voiceId, setVoiceId] = useState(savedVoice);
+  const [voices, setVoices] = useState([]);
+  const [voicesSource, setVoicesSource] = useState("");
+  const [previewingVoice, setPreviewingVoice] = useState(false);
   const [rendering, setRendering] = useState(false);
   const [synthesizing, setSynthesizing] = useState(false);
   const [scripting, setScripting] = useState(false);
@@ -83,6 +90,44 @@ function App() {
     setCurrentFrame(0);
     playerRef.current?.seekTo(0);
   };
+
+  const selectVoice = (id) => {
+    const next = String(id || "").trim() || "zh-CN-YunxiNeural";
+    setVoiceId(next);
+    localStorage.setItem("remotion-voice", next);
+    setSynthesizedProps(null);
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await fetch("/api/voices");
+        const body = await response.json();
+        if (!response.ok) {
+          throw new Error(body.error || "加载音色列表失败");
+        }
+        if (cancelled) {
+          return;
+        }
+        setVoices(Array.isArray(body.voices) ? body.voices : []);
+        setVoicesSource(body.source || "");
+        if (
+          body.defaultVoice &&
+          !localStorage.getItem("remotion-voice")
+        ) {
+          setVoiceId(body.defaultVoice);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.warn(err);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const player = playerRef.current;
@@ -208,7 +253,7 @@ function App() {
       const response = await fetch("/api/synthesize", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ props: scriptedProps }),
+        body: JSON.stringify({ props: scriptedProps, voice: voiceId }),
       });
       const body = await response.json();
       if (!response.ok) {
@@ -221,12 +266,52 @@ function App() {
       const cacheNote = cache
         ? `，缓存命中 ${cache.hits}/未命中 ${cache.misses}`
         : "";
-      setStatus(`语音合成完成（${body.synthId}${cacheNote}）`);
+      const voiceNote = cache?.voice ? ` · ${cache.voice}` : ` · ${voiceId}`;
+      setStatus(`语音合成完成（${body.synthId}${cacheNote}${voiceNote}）`);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setStatus("");
     } finally {
       setSynthesizing(false);
+    }
+  };
+
+  const previewVoice = async () => {
+    setPreviewingVoice(true);
+    setError("");
+    setStatus(`正在试听音色 ${voiceId}...`);
+    try {
+      if (previewAudioRef.current) {
+        previewAudioRef.current.pause();
+        URL.revokeObjectURL(previewAudioRef.current.src);
+        previewAudioRef.current = null;
+      }
+      const response = await fetch("/api/voice-preview", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ voice: voiceId }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || "试听失败");
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      previewAudioRef.current = audio;
+      audio.onended = () => {
+        URL.revokeObjectURL(url);
+        if (previewAudioRef.current === audio) {
+          previewAudioRef.current = null;
+        }
+      };
+      await audio.play();
+      setStatus(`正在播放试听：${voiceId}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setStatus("");
+    } finally {
+      setPreviewingVoice(false);
     }
   };
 
@@ -259,7 +344,7 @@ function App() {
     setCurrentFrame(frame);
   };
 
-  const busy = rendering || synthesizing || scripting;
+  const busy = rendering || synthesizing || scripting || previewingVoice;
 
   return (
     <main className="shell">
@@ -328,7 +413,7 @@ function App() {
               {script.cases.map((item) => (
                 <div className="scriptField" key={item.index}>
                   <label>
-                    案例 {item.index} · {item.title}
+                    精选 {item.index} · {item.title}
                   </label>
                   <textarea
                     value={item.narration}
@@ -409,6 +494,37 @@ function App() {
             <span className="meta" style={{ marginTop: 0 }}>
               {activeTemplate.label}
             </span>
+          </div>
+
+          <div className="toolbarGroup">
+            <span>音色</span>
+            <select
+              className="voiceSelect"
+              value={voiceId}
+              onChange={(event) => selectVoice(event.target.value)}
+              disabled={busy}
+              title={voicesSource ? `来源：${voicesSource}` : "Azure 中文音色"}
+            >
+              {(voices.some((item) => item.id === voiceId)
+                ? voices
+                : [
+                    { id: voiceId, label: voiceId },
+                    ...voices,
+                  ]
+              ).map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.label || item.id}
+                </option>
+              ))}
+            </select>
+            <button
+              className="secondary voicePreviewBtn"
+              type="button"
+              onClick={previewVoice}
+              disabled={busy}
+            >
+              {previewingVoice ? "试听中" : "试听"}
+            </button>
           </div>
 
           <div className="toolbarGrow" />

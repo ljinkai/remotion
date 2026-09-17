@@ -201,28 +201,13 @@ const runOneJob = async (root, jobId) => {
     );
 
     const voice = options.voice?.trim();
-    const previousVoice = process.env.AZURE_SPEECH_VOICE;
-    if (voice) {
-      process.env.AZURE_SPEECH_VOICE = voice;
-    }
-
     await updateJob(root, jobId, { status: "synthesizing" });
     let enriched;
-    try {
-      const synth = await synthesizeVideoProps(props, { root });
-      enriched = synth.props;
-      enriched.aspect = options.aspect;
-      if (props.templateId) {
-        enriched.templateId = props.templateId;
-      }
-    } finally {
-      if (voice) {
-        if (previousVoice === undefined) {
-          delete process.env.AZURE_SPEECH_VOICE;
-        } else {
-          process.env.AZURE_SPEECH_VOICE = previousVoice;
-        }
-      }
+    const synth = await synthesizeVideoProps(props, { root, voice });
+    enriched = synth.props;
+    enriched.aspect = options.aspect;
+    if (props.templateId) {
+      enriched.templateId = props.templateId;
     }
     await writeFile(
       path.join(workDir, "props.json"),

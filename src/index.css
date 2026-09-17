@@ -118,17 +118,12 @@ body {
   right: 64px;
   top: 44px;
   display: grid;
-  grid-template-columns: 260px 72px 1fr;
+  grid-template-columns: auto 1fr;
   gap: 24px;
   align-items: center;
   color: var(--fg-muted);
   font-size: 22px;
   font-weight: 850;
-}
-
-.header strong {
-  color: var(--fg);
-  font-size: 27px;
 }
 
 .progressTrack {
@@ -577,13 +572,9 @@ body {
   left: 36px;
   right: 36px;
   top: 48px;
-  grid-template-columns: 1fr 64px;
+  grid-template-columns: auto 1fr;
   gap: 14px;
   font-size: 18px;
-}
-
-.scene[data-aspect="portrait"] .header .progressTrack {
-  grid-column: 1 / -1;
 }
 
 .scene[data-aspect="portrait"] .coverMain {

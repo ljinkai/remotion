@@ -4,12 +4,11 @@ import {
   buildTimedSubtitleCues,
   narrationForSpeech,
 } from "./subtitle-lines.mjs";
-
-const DEFAULT_VOICE = "zh-CN-YunxiNeural";
+import { DEFAULT_AZURE_VOICE } from "./azure-voices.mjs";
 
 const ticksToMs = (ticks) => Math.round(ticks / 10000);
 
-export const getAzureSpeechConfig = () => {
+export const getAzureSpeechConfig = (overrides = {}) => {
   const key = process.env.AZURE_SPEECH_KEY?.trim();
   const region = process.env.AZURE_SPEECH_REGION?.trim();
   if (!key) {
@@ -18,11 +17,14 @@ export const getAzureSpeechConfig = () => {
   if (!region) {
     throw new Error("缺少环境变量 AZURE_SPEECH_REGION");
   }
-  const voice = process.env.AZURE_SPEECH_VOICE?.trim() || DEFAULT_VOICE;
+  const voice =
+    String(overrides.voice || "").trim() ||
+    process.env.AZURE_SPEECH_VOICE?.trim() ||
+    DEFAULT_AZURE_VOICE;
   return { key, region, voice };
 };
 
-export const synthesizeScene = async (text, outputPath) => {
+export const synthesizeScene = async (text, outputPath, options = {}) => {
   const narration = text.trim();
   if (!narration) {
     return {
@@ -34,7 +36,7 @@ export const synthesizeScene = async (text, outputPath) => {
 
   const speakText = narrationForSpeech(narration) || narration;
 
-  const { key, region, voice } = getAzureSpeechConfig();
+  const { key, region, voice } = getAzureSpeechConfig(options);
   const speechConfig = sdk.SpeechConfig.fromSubscription(key, region);
   speechConfig.speechSynthesisVoiceName = voice;
   speechConfig.speechSynthesisOutputFormat =
@@ -100,6 +102,7 @@ export const synthesizeScene = async (text, outputPath) => {
       durationMs,
       cues,
       audioPath: outputPath,
+      voice,
     };
   } finally {
     synthesizer.close();
