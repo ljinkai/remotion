@@ -355,6 +355,13 @@ const renderWorkbenchHtml = () => `<!doctype html>
         background: white;
         line-height: 1.45;
       }
+      .copyRow {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 6px;
+      }
+      .copyRow button { padding: 7px 12px; font-size: 12px; }
       .scriptEmpty {
         margin: 0;
         padding: 18px 8px;

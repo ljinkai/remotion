@@ -79,24 +79,26 @@ const fade = (frame: number, start: number, end: number) =>
 const sceneProgress = (frame: number, durationFrames: number) =>
   interpolate(frame, [0, Math.max(durationFrames - 1, 1)], [0, 1], clamp);
 
-/** Cover H1 size by Chinese/Latin title length. */
+/** Cover H1 size by Chinese/Latin title length — keep single-line readable. */
 export const fitCoverTitleSize = (title: string, portrait = false) => {
   const len = [...title.trim()].length;
-  let size = 132;
+  let size = 156;
   if (len <= 6) {
-    size = 132;
+    size = 156;
   } else if (len <= 10) {
-    size = 104;
+    size = 128;
+  } else if (len <= 12) {
+    size = 108;
   } else if (len <= 14) {
+    size = 96;
+  } else if (len <= 16) {
+    size = 84;
+  } else if (len <= 20) {
     size = 72;
-  } else if (len <= 18) {
-    size = 58;
-  } else if (len <= 24) {
-    size = 50;
   } else {
-    size = 44;
+    size = 60;
   }
-  return portrait ? Math.round(size * 0.72) : size;
+  return portrait ? Math.round(size * 0.7) : size;
 };
 
 /** Case meta title — keeps strip height stable. */
@@ -302,20 +304,23 @@ const CoverScene: React.FC<{
   video: WeeklyVideoProps;
   portrait?: boolean;
 }> = ({ video, portrait = false }) => {
-  const brandSize = portrait ? 28 : 36;
-  const issueHeadline = `${video.headerTitle}（第${video.issueNumber}期）`;
-  const titleSize = fitCoverTitleSize(issueHeadline, portrait);
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const showBottomChrome = frame >= fps;
+  const brandSize = portrait ? 32 : 52;
+  const issueLabel = `第${video.issueNumber}期`;
   const rawTheme = video.coverTitle.trim();
   const themeTitle =
     rawTheme &&
-    rawTheme !== issueHeadline &&
-    stripIssueParen(rawTheme) !== video.headerTitle
-      ? rawTheme
+    stripIssueParen(rawTheme) !== video.headerTitle &&
+    rawTheme !== `${video.headerTitle}（第${video.issueNumber}期）`
+      ? stripIssueParen(rawTheme).replace(
+          new RegExp(`^${video.headerTitle}[：:\\s]*`),
+          "",
+        ).trim() || rawTheme
       : "";
-  const themeSize = fitCoverTitleSize(
-    themeTitle.length > 0 ? themeTitle : "精选",
-    portrait,
-  );
+  const heroTitle = themeTitle || issueLabel;
+  const heroSize = fitCoverTitleSize(heroTitle, portrait);
 
   return (
     <AbsoluteFill className="coverSceneLayout">
@@ -324,38 +329,38 @@ const CoverScene: React.FC<{
         <div className="coverMain">
           <div className="coverBrandBlock">
             <p className="coverBrandName" style={{ fontSize: brandSize }}>
-              {video.headerTitle}
+              {video.headerTitle.endsWith("精选")
+                ? video.headerTitle
+                : `${video.headerTitle}-精选`}
             </p>
             <div
               className="coverBrandLine"
               style={{ width: portrait ? 160 : 220 }}
             />
             <div className="coverThemeBlock">
-              <h1 className="coverThemeTitle" style={{ fontSize: titleSize }}>
-                {issueHeadline}
-              </h1>
               {themeTitle ? (
-                <h2
-                  className="coverThemeHook"
-                  style={{
-                    fontSize: Math.max(
-                      portrait ? 32 : 40,
-                      Math.min(portrait ? 52 : 68, themeSize),
-                    ),
-                  }}
+                <p
+                  className="coverIssueLabel"
+                  style={{ fontSize: portrait ? 34 : 56 }}
                 >
-                  {themeTitle}
-                </h2>
+                  {issueLabel}
+                </p>
               ) : null}
+              <h1
+                className="coverThemeTitle"
+                style={{ fontSize: heroSize }}
+              >
+                {heroTitle}
+              </h1>
               <span
                 className="coverThemeSub"
-                style={portrait ? { fontSize: 26 } : undefined}
+                style={{ fontSize: portrait ? 26 : 44 }}
               >
                 {video.coverSubtitle}
               </span>
             </div>
           </div>
-          {video.coverBadge ? (
+          {showBottomChrome && video.coverBadge ? (
             <div
               className="coverBadge"
               style={
@@ -369,11 +374,13 @@ const CoverScene: React.FC<{
           ) : null}
         </div>
       </section>
-      <SceneSubtitles
-        cues={video.introCues}
-        fallbackText={video.introSubtitle}
-        portrait={portrait}
-      />
+      {showBottomChrome ? (
+        <SceneSubtitles
+          cues={video.introCues}
+          fallbackText={video.introSubtitle}
+          portrait={portrait}
+        />
+      ) : null}
     </AbsoluteFill>
   );
 };

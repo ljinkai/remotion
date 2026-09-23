@@ -35,6 +35,36 @@ const isLeadIn = (text) =>
 
 const isAuthorLike = (text) => /作者|@/.test(text);
 
+const isLatinChar = (ch) => /[A-Za-z0-9@._+-]/.test(ch || "");
+
+export const tokenizeSubtitleAtoms = (text) => {
+  const chars = [...stripSubtitlePunctuation(text)];
+  const tokens = [];
+  let index = 0;
+  while (index < chars.length) {
+    const ch = chars[index] ?? "";
+    if (ch === " ") {
+      tokens.push({ type: "space", text: " " });
+      index += 1;
+      continue;
+    }
+    if (isLatinChar(ch)) {
+      let end = index + 1;
+      while (end < chars.length && isLatinChar(chars[end] ?? "")) {
+        end += 1;
+      }
+      tokens.push({ type: "latin", text: chars.slice(index, end).join("") });
+      index = end;
+      continue;
+    }
+    tokens.push({ type: "cjk", text: ch });
+    index += 1;
+  }
+  return tokens;
+};
+
+const tokenLen = (token) => charLen(token.text);
+
 const forceBreakClause = (clause) => {
   const text = stripSubtitlePunctuation(clause);
   if (!text) {
@@ -44,19 +74,155 @@ const forceBreakClause = (clause) => {
     return [text];
   }
 
-  const chars = [...text];
-  const target = Math.min(MAX_SUBTITLE_CHARS, Math.ceil(chars.length / 2));
-  let splitAt = target;
-  for (let i = target; i >= Math.floor(target * 0.55); i -= 1) {
-    if ("的了在和与及到对把被让与或而 ".includes(chars[i] ?? "")) {
-      splitAt = i + 1;
-      break;
-    }
+  const tokens = tokenizeSubtitleAtoms(text);
+  if (tokens.length <= 1) {
+    return [text];
   }
 
-  const head = chars.slice(0, splitAt).join("").trim();
-  const rest = chars.slice(splitAt).join("").trim();
-  return [...forceBreakClause(head), ...forceBreakClause(rest)].filter(Boolean);
+  const lines = [];
+  let current = [];
+  let currentLen = 0;
+
+  const flush = () => {
+    const line = current
+      .map((item) => item.text)
+      .join("")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (line) {
+      lines.push(line);
+    }
+    current = [];
+    currentLen = 0;
+  };
+
+  const peekLatinPhraseLen = (from) => {
+    let len = 0;
+    let index = from;
+    let sawLatin = false;
+    while (index < tokens.length) {
+      const token = tokens[index];
+      if (!token) {
+        break;
+      }
+      if (token.type === "latin") {
+        len += tokenLen(token);
+        sawLatin = true;
+        index += 1;
+        continue;
+      }
+      if (token.type === "space" && sawLatin && tokens[index + 1]?.type === "latin") {
+        len += 1;
+        index += 1;
+        continue;
+      }
+      break;
+    }
+    return sawLatin ? len : 0;
+  };
+
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (!token) {
+      continue;
+    }
+
+    if (token.type === "space" && current.length === 0) {
+      continue;
+    }
+
+    if (
+      token.type === "latin" ||
+      (token.type === "space" && tokens[index + 1]?.type === "latin")
+    ) {
+      const phraseLen = peekLatinPhraseLen(index);
+      if (
+        phraseLen > 0 &&
+        currentLen > 0 &&
+        currentLen + phraseLen > MAX_SUBTITLE_CHARS &&
+        currentLen + phraseLen <= HARD_SUBTITLE_CHARS + 8 &&
+        currentLen >= Math.min(6, MAX_SUBTITLE_CHARS)
+      ) {
+        if (phraseLen <= HARD_SUBTITLE_CHARS + 4) {
+          flush();
+        }
+      }
+    }
+
+    const nextLen = currentLen + tokenLen(token);
+    if (
+      current.length > 0 &&
+      nextLen > MAX_SUBTITLE_CHARS &&
+      !(
+        token.type === "latin" &&
+        currentLen + tokenLen(token) <= HARD_SUBTITLE_CHARS + 6
+      )
+    ) {
+      if (
+        token.type === "space" &&
+        current[current.length - 1]?.type === "latin" &&
+        tokens[index + 1]?.type === "latin"
+      ) {
+        const joined = currentLen + 1 + tokenLen(tokens[index + 1]);
+        if (joined <= HARD_SUBTITLE_CHARS + 6) {
+          current.push(token);
+          currentLen += 1;
+          continue;
+        }
+      }
+      flush();
+      if (token.type === "space") {
+        continue;
+      }
+    }
+
+    current.push(token);
+    currentLen += tokenLen(token);
+  }
+  flush();
+  return lines.length > 0 ? lines : [text];
+};
+
+export const repairBrokenLatinLines = (lines) => {
+  const out = [];
+  for (const rawLine of lines) {
+    const line = stripSubtitlePunctuation(rawLine);
+    if (!line) {
+      continue;
+    }
+    if (out.length === 0) {
+      out.push(line);
+      continue;
+    }
+
+    const prev = out[out.length - 1] ?? "";
+    const lastLatinRun = prev.match(/[A-Za-z0-9@._+-]+$/)?.[0] ?? "";
+    // "Ins" + "tagram" → broken word, glue without space
+    if (lastLatinRun && /^[a-z0-9]/.test(line) && lastLatinRun.length <= 4) {
+      out[out.length - 1] = `${prev}${line}`;
+      continue;
+    }
+    // Keep short Latin phrases together: "indie" + "hacker"
+    if (
+      lastLatinRun &&
+      /^[A-Za-z]/.test(line) &&
+      charLen(`${prev} ${line}`) <= HARD_SUBTITLE_CHARS + 8
+    ) {
+      const nextWord = line.split(/\s+/)[0] ?? "";
+      if (
+        /^[A-Za-z0-9@._+-]+$/.test(lastLatinRun) &&
+        /^[A-Za-z0-9@._+-]+/.test(nextWord) &&
+        charLen(lastLatinRun) <= 16 &&
+        charLen(nextWord) <= 16
+      ) {
+        out[out.length - 1] = `${prev} ${line}`;
+        continue;
+      }
+    }
+
+    out.push(line);
+  }
+  return out;
 };
 
 export const mergeSubtitleSegments = (segments) => {
@@ -91,7 +257,12 @@ export const mergeSubtitleSegments = (segments) => {
     index += 1;
   }
 
-  return out;
+  return repairBrokenLatinLines(out).flatMap((line) => {
+    if (charLen(line) > HARD_SUBTITLE_CHARS) {
+      return forceBreakClause(line);
+    }
+    return [line];
+  });
 };
 
 export const splitSubtitleLines = (raw) => {

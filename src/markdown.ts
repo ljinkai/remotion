@@ -155,6 +155,34 @@ const fieldValue = (lines: string[], names: string[]) => {
   return "";
 };
 
+/** Match italic meta lines like `*@handle · 2026/09/13*` from weekly MD. */
+const AUTHOR_META_LINE =
+  /^\*{1,2}\s*@([A-Za-z0-9._]+)\s*(?:[·•|]\s*([^*=\n]+?))?\s*\*{1,2}$/;
+const AUTHOR_PLAIN_LINE =
+  /^@([A-Za-z0-9._]+)\s*(?:[·•|]\s*([^\n]+))?$/;
+
+const isAuthorMetaLine = (line: string) => {
+  const cleaned = line.trim();
+  return AUTHOR_META_LINE.test(cleaned) || AUTHOR_PLAIN_LINE.test(cleaned);
+};
+
+const parseAuthorMetaLine = (lines: string[]) => {
+  for (const line of lines) {
+    const cleaned = line.trim();
+    const match =
+      cleaned.match(AUTHOR_META_LINE) || cleaned.match(AUTHOR_PLAIN_LINE);
+    if (!match) {
+      continue;
+    }
+    const author = `@${match[1]}`;
+    const date = strip(match[2] || "")
+      .replace(/\*{1,2}$/g, "")
+      .trim();
+    return { author, date };
+  }
+  return { author: "", date: "" };
+};
+
 const firstImage = (lines: string[]) => {
   const fromField = fieldValue(lines, ["图片", "image", "img"]);
   if (fromField) {
@@ -175,6 +203,7 @@ const bodyText = (lines: string[]) =>
     .map((line) => line.trim())
     .filter(Boolean)
     .filter((line) => !line.startsWith("!"))
+    .filter((line) => !isAuthorMetaLine(line))
     .filter(
       (line) =>
         !/^[-*]?\s*(作者|author|日期|date|指标|metric|图片|image|img|标签|fallback|副标题|subtitle|旁白|narration)\s*[:：]/i.test(
@@ -289,13 +318,19 @@ export const parseMarkdownToVideo = (
       fieldValue(section.body, ["旁白", "narration"]) ||
       fieldValue(section.body, ["副标题", "subtitle"]) ||
       firstSentence(text, title);
+    const metaFromLine = parseAuthorMetaLine(section.body);
 
     return {
       index: String(index + 1).padStart(2, "0"),
       title,
-      author: fieldValue(section.body, ["作者", "author"]) || "Unknown",
-      date: fieldValue(section.body, ["日期", "date"]) || "",
-      metric: fieldValue(section.body, ["指标", "metric"]) || metricFallback,
+      author:
+        fieldValue(section.body, ["作者", "author"]) ||
+        metaFromLine.author ||
+        "Unknown",
+      date:
+        fieldValue(section.body, ["日期", "date"]) || metaFromLine.date || "",
+      metric:
+        fieldValue(section.body, ["指标", "metric"]) || metricFallback,
       image: firstImage(section.body),
       fallback,
       subtitle: narration,

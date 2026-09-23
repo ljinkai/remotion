@@ -153,10 +153,11 @@ const buildUserPromptZh = (props) => {
 3. cases 数量必须为 ${props.cases.length}，index 与输入一致。
 4. 口语短句；保留产品名与关键数字；不要 URL、emoji、列表符号。
 5. 【字幕格式】每一行 ≤${MAX_SUBTITLE_CHARS} 个汉字；遇到逗号、句号、顿号、分号都拆成新行；行内不要出现，。！？、；：。
-6. narration / intro / closing 内部用换行分隔每一行字幕。
-7. 「第一条」「接下来」等短衔接可与下一短句同一行，中间用空格。
-8. 【篇幅】每个案例 narration 至少 8 行、建议 10～16 行；intro 至少 4 行；closing 写 2～4 行本期总结即可（不要写关注/下周见，系统会追加）。把 markdownBody 里的要点拆成多行口播，不要过度压缩。
-9. 正确示例（注意：只是格式示例，真实内容要以输入的 markdownBody 为准写满）：
+6. 【英文完整性】Instagram、Reachlee、indie hacker 等英文品牌名/词组必须完整保留在同一行，禁止拆成 Ins/tagram 或 indie/hacker。
+7. narration / intro / closing 内部用换行分隔每一行字幕。
+8. 「第一条」「接下来」等短衔接可与下一短句同一行，中间用空格。
+9. 【篇幅】每个案例 narration 至少 8 行、建议 10～16 行；intro 至少 4 行；closing 写 2～4 行本期总结即可（不要写关注/下周见，系统会追加）。把 markdownBody 里的要点拆成多行口播，不要过度压缩。
+10. 正确示例（注意：只是格式示例，真实内容要以输入的 markdownBody 为准写满）：
    第一条 小众产品重启记
    作者是@farrux_hewson
    用时仅三个月
@@ -248,8 +249,8 @@ const callChatCompletions = async (
 ) => {
   const isEn = normalizeLocale(locale) === "en";
   const system = isEn
-    ? `You write English spoken narration and subtitles. Output strict JSON. Expand from markdownBody / introMarkdown / closingMarkdown — never ultra-short summaries. Split each field into short subtitle lines (≤${MAX_SUBTITLE_CHARS_EN} chars); no commas or periods inside a line; ≥8 lines per case.`
-    : `你是中文口播与字幕编辑。输出严格 JSON。必须依据输入里的 markdownBody / introMarkdown / closingMarkdown 充分改写，覆盖原文要点，禁止只写极短摘要。每个字段用换行分成多行短字幕；行内不要写逗号或句号；每行不超过 ${MAX_SUBTITLE_CHARS} 个汉字；每个案例至少 8 行。`;
+    ? `You write English spoken narration and subtitles. Output strict JSON. Expand from markdownBody / introMarkdown / closingMarkdown — never ultra-short summaries. Split each field into short subtitle lines (≤${MAX_SUBTITLE_CHARS_EN} chars); no commas or periods inside a line; ≥8 lines per case. Keep English brand names and phrases (e.g. Instagram, indie hacker) intact on one line — never split mid-word.`
+    : `你是中文口播与字幕编辑。输出严格 JSON。必须依据输入里的 markdownBody / introMarkdown / closingMarkdown 充分改写，覆盖原文要点，禁止只写极短摘要。每个字段用换行分成多行短字幕；行内不要写逗号或句号；每行不超过 ${MAX_SUBTITLE_CHARS} 个汉字；每个案例至少 8 行。英文品牌名与词组（如 Instagram、indie hacker）必须完整留在同一行，禁止中途拆词。`;
 
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
