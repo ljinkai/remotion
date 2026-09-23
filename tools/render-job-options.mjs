@@ -1,7 +1,7 @@
 /**
  * Normalize /api/v1/render-jobs options.
- * - `aspects`: preferred list, e.g. ["landscape","portrait"]
- * - `aspect`: legacy single value (default landscape)
+ * - `aspects`: preferred list, e.g. ["portrait","landscape"]
+ * - `aspect`: legacy single value (default portrait)
  */
 export const normalizeRenderJobOptions = (raw = {}) => {
   const source = raw && typeof raw === "object" ? raw : {};
@@ -22,7 +22,7 @@ export const normalizeRenderJobOptions = (raw = {}) => {
     const aspectRaw = String(source.aspect || "")
       .trim()
       .toLowerCase();
-    aspects = [aspectRaw === "portrait" ? "portrait" : "landscape"];
+    aspects = [aspectRaw === "landscape" ? "landscape" : "portrait"];
   }
 
   const aspect = aspects[0];

@@ -43,7 +43,7 @@ const buildCallbackPayload = (job, extra = {}) => ({
       : job.status === "done" || extra.status === "partial" || extra.status === "done"
         ? job.video_url
         : null,
-  aspect: extra.aspect || job.options?.aspect || "landscape",
+  aspect: extra.aspect || job.options?.aspect || "portrait",
   error: (extra.status || job.status) === "failed" ? job.error || extra.error || null : null,
   finished_at: extra.finished_at || job.finished_at || nowIso(),
 });
@@ -305,7 +305,7 @@ const runOneJob = async (root, jobId) => {
     });
     await deliverCallback(root, jobId, {
       status: "failed",
-      aspect: job.options?.aspect || "landscape",
+      aspect: job.options?.aspect || "portrait",
       video_url: job.video_url || null,
       error: message,
       finished_at: nowIso(),

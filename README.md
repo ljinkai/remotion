@@ -92,8 +92,8 @@ Create body:
     "skip_ai_script": false,
     "locale": "zh",
     "voice": "zh-CN-YunxiNeural",
-    "aspect": "landscape",
-    "aspects": ["landscape", "portrait"],
+    "aspect": "portrait",
+    "aspects": ["portrait"],
     "template_id": "midnight"
   }
 }
@@ -101,7 +101,7 @@ Create body:
 
 `options.locale`: `"zh"`（默认）或 `"en"`。英文视频请传 `locale: "en"` 与英文音色（如 `en-US-JennyNeural`）；Markdown 可用 `Author`/`Date`/`Metric`/`## Takeaway`。
 
-`options.aspect`: `"landscape"`（默认 16:9）或 `"portrait"`（9:16）。
+`options.aspect`: `"portrait"`（默认 9:16）或 `"landscape"`（16:9）。未传 `aspects` 时默认只渲竖屏。
 
 Pipeline: Markdown → Qwen script (unless skip / full `旁白`) → Azure TTS → Remotion MP4 → Qiniu → **POST webhook**.
 

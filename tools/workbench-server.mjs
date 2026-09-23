@@ -800,7 +800,7 @@ const server = createServer(async (req, res) => {
         job_id: job.job_id,
         status: job.status,
         client_ref: job.client_ref,
-        aspect: job.options?.aspect || "landscape",
+        aspect: job.options?.aspect || "portrait",
       });
       return;
     }

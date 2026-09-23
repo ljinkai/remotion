@@ -9,17 +9,9 @@ export type VideoFormat = {
   height: number;
 };
 
-export const DEFAULT_ASPECT: VideoAspect = "landscape";
+export const DEFAULT_ASPECT: VideoAspect = "portrait";
 
 export const VIDEO_FORMATS: VideoFormat[] = [
-  {
-    id: "landscape",
-    label: "横屏 16:9",
-    blurb: "1920×1080 · B 站 / YouTube",
-    compositionId: "IndieWeeklyMarkdown",
-    width: 1920,
-    height: 1080,
-  },
   {
     id: "portrait",
     label: "竖屏 9:16",
@@ -27,6 +19,14 @@ export const VIDEO_FORMATS: VideoFormat[] = [
     compositionId: "IndieWeeklyMarkdownPortrait",
     width: 1080,
     height: 1920,
+  },
+  {
+    id: "landscape",
+    label: "横屏 16:9",
+    blurb: "1920×1080 · B 站 / YouTube",
+    compositionId: "IndieWeeklyMarkdown",
+    width: 1920,
+    height: 1080,
   },
 ];
 
@@ -38,5 +38,9 @@ export const resolveAspect = (value?: string | null): VideoAspect =>
 
 export const getVideoFormat = (value?: string | null): VideoFormat => {
   const id = resolveAspect(value);
-  return VIDEO_FORMATS.find((item) => item.id === id) ?? VIDEO_FORMATS[0];
+  return (
+    VIDEO_FORMATS.find((item) => item.id === id) ??
+    VIDEO_FORMATS.find((item) => item.id === DEFAULT_ASPECT) ??
+    VIDEO_FORMATS[0]
+  );
 };
