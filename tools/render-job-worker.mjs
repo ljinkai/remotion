@@ -32,23 +32,33 @@ export const signWebhookBody = (rawBody, secret = webhookSecret()) => {
   return `sha256=${hex}`;
 };
 
-const buildCallbackPayload = (job) => ({
+const buildCallbackPayload = (job, extra = {}) => ({
   job_id: job.job_id,
   client_ref: job.client_ref,
-  status: job.status,
-  progress: job.progress ?? (job.status === "done" ? 100 : 0),
-  video_url: job.status === "done" ? job.video_url : null,
-  error: job.status === "failed" ? job.error : null,
-  finished_at: job.finished_at || nowIso(),
+  status: extra.status || job.status,
+  progress: extra.progress ?? job.progress ?? (job.status === "done" ? 100 : 0),
+  video_url:
+    extra.video_url !== undefined
+      ? extra.video_url
+      : job.status === "done" || extra.status === "partial" || extra.status === "done"
+        ? job.video_url
+        : null,
+  aspect: extra.aspect || job.options?.aspect || "landscape",
+  error: (extra.status || job.status) === "failed" ? job.error || extra.error || null : null,
+  finished_at: extra.finished_at || job.finished_at || nowIso(),
 });
 
-export const deliverCallback = async (root, jobId) => {
+export const deliverCallback = async (root, jobId, extra = {}) => {
   let job = await readJob(root, jobId);
   if (!job?.callback_url) {
     return job;
   }
 
-  const payload = buildCallbackPayload(job);
+  const payload = buildCallbackPayload(job, extra);
+  // Prefer explicit video_url for this aspect callback
+  if (extra.video_url) {
+    payload.video_url = extra.video_url;
+  }
   const rawBody = JSON.stringify(payload);
   const signature = signWebhookBody(rawBody);
   const attempts = [...CALLBACK_BACKOFF_MS];
@@ -153,8 +163,10 @@ const runOneJob = async (root, jobId) => {
   await mkdir(workDir, { recursive: true });
 
   try {
+    const optionsEarly = normalizeRenderJobOptions(job.options);
+    const locale = optionsEarly.locale === "en" ? "en" : "zh";
     const runtime = await loadMarkdownRuntime(root);
-    let props = runtime.parseMarkdownToVideo(job.markdown);
+    let props = runtime.parseMarkdownToVideo(job.markdown, { locale });
     if (!Array.isArray(props.cases) || props.cases.length === 0) {
       throw new Error("Markdown 未解析出案例段落");
     }
@@ -168,8 +180,8 @@ const runOneJob = async (root, jobId) => {
     let script;
     if (skipAi) {
       script =
-        runtime.tryBuildScriptFromMarkdown(job.markdown) ||
-        runtime.buildScriptFromProps(props, "markdown");
+        runtime.tryBuildScriptFromMarkdown(job.markdown, { locale }) ||
+        runtime.buildScriptFromProps(props, "markdown", locale);
       if (!runtime.scriptIsComplete(script)) {
         throw new Error("skip_ai_script 已开启，但 Markdown 旁白不完整");
       }
@@ -177,11 +189,13 @@ const runOneJob = async (root, jobId) => {
       script = await generateNarrationScript(props, {
         markdown: job.markdown,
         root,
+        locale,
       });
     }
-    props = runtime.applyNarrationScript(props, script);
-    const options = normalizeRenderJobOptions(job.options);
-    props.aspect = options.aspect;
+    props = runtime.applyNarrationScript(props, script, locale);
+    const options = optionsEarly;
+    const aspects = options.aspects?.length ? options.aspects : [options.aspect];
+    props.aspect = aspects[0];
     if (options.templateId || options.template_id) {
       props.templateId = options.templateId || options.template_id;
     }
@@ -200,12 +214,17 @@ const runOneJob = async (root, jobId) => {
       "utf8",
     );
 
-    const voice = options.voice?.trim();
+    const { defaultVoiceForLocale, resolveVoiceId } = await import(
+      "./azure-voices.mjs"
+    );
+    const voice = resolveVoiceId(
+      options.voice?.trim(),
+      defaultVoiceForLocale(locale),
+    );
     await updateJob(root, jobId, { status: "synthesizing" });
     let enriched;
     const synth = await synthesizeVideoProps(props, { root, voice });
     enriched = synth.props;
-    enriched.aspect = options.aspect;
     if (props.templateId) {
       enriched.templateId = props.templateId;
     }
@@ -215,26 +234,68 @@ const runOneJob = async (root, jobId) => {
       "utf8",
     );
 
-    await updateJob(root, jobId, { status: "rendering" });
-    const outputPath = path.join(workDir, "out.mp4");
-    const propsPath = path.join(workDir, "render-props.json");
-    const renderProps = await embedLocalAudioAsDataUrls(enriched, root);
-    await renderToPath(root, renderProps, outputPath, propsPath);
-
-    await updateJob(root, jobId, { status: "uploading" });
+    const urlsByAspect = {};
     const { keyPrefix } = getQiniuConfig();
-    const objectKey = job.client_ref
-      ? `${keyPrefix}/${job.client_ref}/${jobId}.mp4`
-      : `${keyPrefix}/${jobId}.mp4`;
-    const videoUrl = await uploadFileToQiniu(outputPath, objectKey);
+    const renderPropsBase = await embedLocalAudioAsDataUrls(enriched, root);
 
-    job = await updateJob(root, jobId, {
-      status: "done",
-      progress: 100,
-      video_url: videoUrl,
-      error: null,
-      finished_at: nowIso(),
-    });
+    for (let i = 0; i < aspects.length; i += 1) {
+      const aspect = aspects[i];
+      const isLast = i === aspects.length - 1;
+      await updateJob(root, jobId, { status: "rendering", progress: 50 + i * 15 });
+      const outputPath = path.join(workDir, `out-${aspect}.mp4`);
+      const propsPath = path.join(workDir, `render-props-${aspect}.json`);
+      const renderProps = { ...renderPropsBase, aspect };
+      await renderToPath(root, renderProps, outputPath, propsPath);
+
+      await updateJob(root, jobId, { status: "uploading", progress: 70 + i * 15 });
+      const objectKey = job.client_ref
+        ? `${keyPrefix}/${job.client_ref}/${jobId}-${aspect}.mp4`
+        : `${keyPrefix}/${jobId}-${aspect}.mp4`;
+      const videoUrl = await uploadFileToQiniu(outputPath, objectKey);
+      urlsByAspect[aspect] = videoUrl;
+
+      const patch = {
+        video_urls: { ...urlsByAspect },
+      };
+      if (aspect === "landscape") {
+        patch.video_url = videoUrl;
+      }
+      if (aspect === "portrait") {
+        patch.video_url_portrait = videoUrl;
+      }
+      if (i === 0 && aspect !== "landscape") {
+        patch.video_url = videoUrl;
+      }
+
+      job = await updateJob(root, jobId, patch);
+
+      const cbStatus = isLast ? "done" : "partial";
+      const cbProgress = isLast ? 100 : Math.round(((i + 1) / aspects.length) * 90);
+      if (isLast) {
+        job = await updateJob(root, jobId, {
+          status: "done",
+          progress: 100,
+          error: null,
+          finished_at: nowIso(),
+        });
+      }
+      await deliverCallback(root, jobId, {
+        status: cbStatus,
+        aspect,
+        video_url: videoUrl,
+        progress: cbProgress,
+        finished_at: nowIso(),
+      });
+    }
+
+    if (job.status !== "done") {
+      job = await updateJob(root, jobId, {
+        status: "done",
+        progress: 100,
+        error: null,
+        finished_at: nowIso(),
+      });
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     job = await updateJob(root, jobId, {
@@ -242,9 +303,15 @@ const runOneJob = async (root, jobId) => {
       error: message,
       finished_at: nowIso(),
     });
+    await deliverCallback(root, jobId, {
+      status: "failed",
+      aspect: job.options?.aspect || "landscape",
+      video_url: job.video_url || null,
+      error: message,
+      finished_at: nowIso(),
+    });
+    return;
   }
-
-  await deliverCallback(root, jobId);
 };
 
 let queue = Promise.resolve();

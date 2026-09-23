@@ -5,7 +5,11 @@ import {
   type WeeklyVideoProps,
 } from "./videoData";
 import type { NarrationScript } from "./narrationScript";
-import { appendFixedClosingCta } from "./narrationScript";
+import {
+  appendFixedClosingCta,
+  normalizeVideoLocale,
+  type VideoLocale,
+} from "./narrationScript";
 import { optimizeNarrationForSubtitles } from "./subtitleLines";
 
 export const sampleMarkdown = `---
@@ -198,13 +202,18 @@ const parseIssueNumber = (title: string, meta: Record<string, string>) => {
   if (meta.issue) {
     return meta.issue;
   }
-  const match = title.match(/第\s*(\d+)\s*期/);
-  return match ? match[1] : defaultVideoProps.issueNumber;
+  const zh = title.match(/第\s*(\d+)\s*期/);
+  if (zh) {
+    return zh[1];
+  }
+  const en = title.match(/Issue\s+#?\s*(\d+)/i);
+  return en ? en[1] : defaultVideoProps.issueNumber;
 };
 
 const stripIssueParen = (text: string) =>
   String(text || "")
     .replace(/[（(]\s*第\s*\d+\s*期\s*[）)]/g, "")
+    .replace(/\(\s*Issue\s+#?\s*\d+\s*\)/gi, "")
     .replace(/\s+/g, " ")
     .trim();
 
@@ -216,7 +225,8 @@ const isBrandLikeTitle = (text: string, headerTitle: string) => {
   return (
     cleaned === headerTitle ||
     cleaned === "独立开发变现周刊" ||
-    cleaned === "独立开发周刊"
+    cleaned === "独立开发周刊" ||
+    cleaned === "Indie Maker Weekly"
   );
 };
 
@@ -237,21 +247,44 @@ const parseCoverTitle = (title: string, meta: Record<string, string>) => {
 };
 
 const isClosingSection = (title: string) =>
-  /总结|结尾|closing|takeaway/i.test(title);
+  /总结|结尾|closing|takeaway|in one line/i.test(title);
 
-export const parseMarkdownToVideo = (markdown: string): WeeklyVideoProps => {
+const resolveParseLocale = (
+  meta: Record<string, string>,
+  optionsLocale?: string | null,
+): VideoLocale => {
+  if (optionsLocale != null && String(optionsLocale).trim() !== "") {
+    return normalizeVideoLocale(optionsLocale);
+  }
+  return normalizeVideoLocale(meta.locale);
+};
+
+export type ParseMarkdownOptions = {
+  locale?: string | null;
+};
+
+export const parseMarkdownToVideo = (
+  markdown: string,
+  options: ParseMarkdownOptions = {},
+): WeeklyVideoProps => {
   const source = markdown.trim() ? markdown : sampleMarkdown;
   const { meta, body } = parseFrontmatter(source);
+  const locale = resolveParseLocale(meta, options.locale);
+  const isEn = locale === "en";
   const { h1, intro, sections } = splitSections(body);
   const contentSections = sections.filter(
     (section) => !isClosingSection(section.title),
   );
   const closing = sections.find((section) => isClosingSection(section.title));
 
+  const metricFallback = isEn ? "Featured" : "精选";
+  const headerDefault = isEn ? "Indie Maker Weekly" : defaultVideoProps.headerTitle;
+  const closingTitleDefault = isEn ? "Takeaway" : defaultVideoProps.closingTitle;
+
   const cases: WeeklyCase[] = contentSections.map((section, index) => {
     const text = bodyText(section.body);
-    const title = section.title || `条目 ${index + 1}`;
-    const fallback = fieldValue(section.body, ["标签", "fallback"]) || title;
+    const title = section.title || (isEn ? `Item ${index + 1}` : `条目 ${index + 1}`);
+    const fallback = fieldValue(section.body, ["标签", "tag", "fallback"]) || title;
     const narration =
       fieldValue(section.body, ["旁白", "narration"]) ||
       fieldValue(section.body, ["副标题", "subtitle"]) ||
@@ -262,7 +295,7 @@ export const parseMarkdownToVideo = (markdown: string): WeeklyVideoProps => {
       title,
       author: fieldValue(section.body, ["作者", "author"]) || "Unknown",
       date: fieldValue(section.body, ["日期", "date"]) || "",
-      metric: fieldValue(section.body, ["指标", "metric"]) || "精选",
+      metric: fieldValue(section.body, ["指标", "metric"]) || metricFallback,
       image: firstImage(section.body),
       fallback,
       subtitle: narration,
@@ -271,38 +304,44 @@ export const parseMarkdownToVideo = (markdown: string): WeeklyVideoProps => {
     };
   });
 
-  const title = h1 || defaultVideoProps.headerTitle;
+  const title = h1 || headerDefault;
   const coverTitle = parseCoverTitle(title, meta);
   const introText = bodyText(intro);
+  const introFallback = isEn
+    ? `This issue of Indie Maker Weekly focuses on ${coverTitle || "indie makers"}.`
+    : `这期${defaultVideoProps.headerTitle}，主线是${coverTitle}。`;
   const introNarration =
     fieldValue(intro, ["旁白", "narration"]) ||
-    firstSentence(
-      introText,
-      `这期${defaultVideoProps.headerTitle}，主线是${coverTitle}。`,
-    );
+    firstSentence(introText, introFallback);
   const closingBody = closing ? closing.body : [];
   const closingText = bodyText(closingBody);
+  const closingFallback = isEn
+    ? "Growth is doing one thing deeply, not everything lightly."
+    : defaultVideoProps.closingSubtitle;
   const closingNarration = appendFixedClosingCta(
     fieldValue(closingBody, ["旁白", "narration"]) ||
       (closing
-        ? firstSentence(closingText, defaultVideoProps.closingSubtitle)
-        : defaultVideoProps.closingSubtitle),
+        ? firstSentence(closingText, closingFallback)
+        : closingFallback),
+    locale,
   );
+
+  const coverSubtitleDefault = isEn
+    ? `${cases.length || 5} indie picks`
+    : `${cases.length || defaultVideoProps.cases.length} 个独立开发精选`;
 
   return {
     issueNumber: parseIssueNumber(title, meta),
-    headerTitle: meta.header || defaultVideoProps.headerTitle,
+    headerTitle: meta.header || headerDefault,
     coverTitle,
-    coverSubtitle:
-      meta.subtitle ||
-      `${cases.length || defaultVideoProps.cases.length} 个独立开发精选`,
+    coverSubtitle: meta.subtitle || coverSubtitleDefault,
     coverBadge:
       meta.badge ||
-      cases.find((item) => item.metric !== "精选")?.metric ||
-      defaultVideoProps.coverBadge,
+      cases.find((item) => item.metric !== metricFallback)?.metric ||
+      (isEn ? "Featured" : defaultVideoProps.coverBadge),
     introSubtitle: introNarration,
     introSourceBody: introText || undefined,
-    closingTitle: closing?.title || defaultVideoProps.closingTitle,
+    closingTitle: closing?.title || closingTitleDefault,
     closingSubtitle: closingNarration,
     closingSourceBody: closingText || undefined,
     ticker: meta.ticker || defaultVideoProps.ticker,
@@ -314,12 +353,14 @@ export const parseMarkdownToVideo = (markdown: string): WeeklyVideoProps => {
 /** Build a narration script only from explicit 旁白/narration fields. */
 export const tryBuildScriptFromMarkdown = (
   markdown: string,
+  options: ParseMarkdownOptions = {},
 ): NarrationScript | null => {
   const source = markdown.trim();
   if (!source) {
     return null;
   }
-  const { body } = parseFrontmatter(source);
+  const { meta, body } = parseFrontmatter(source);
+  const locale = resolveParseLocale(meta, options.locale);
   const { intro, sections } = splitSections(body);
   const contentSections = sections.filter(
     (section) => !isClosingSection(section.title),
@@ -351,7 +392,7 @@ export const tryBuildScriptFromMarkdown = (
     intro: optimizeNarrationForSubtitles(introNarration),
     cases,
     closing: optimizeNarrationForSubtitles(
-      appendFixedClosingCta(closingNarration),
+      appendFixedClosingCta(closingNarration, locale),
     ),
     source: "markdown",
   };

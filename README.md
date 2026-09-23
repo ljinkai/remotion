@@ -90,12 +90,16 @@ Create body:
   "callback_url": "https://vidflow.example/api/hooks/remotion/video-jobs",
   "options": {
     "skip_ai_script": false,
+    "locale": "zh",
     "voice": "zh-CN-YunxiNeural",
     "aspect": "landscape",
+    "aspects": ["landscape", "portrait"],
     "template_id": "midnight"
   }
 }
 ```
+
+`options.locale`: `"zh"`（默认）或 `"en"`。英文视频请传 `locale: "en"` 与英文音色（如 `en-US-JennyNeural`）；Markdown 可用 `Author`/`Date`/`Metric`/`## Takeaway`。
 
 `options.aspect`: `"landscape"`（默认 16:9）或 `"portrait"`（9:16）。
 

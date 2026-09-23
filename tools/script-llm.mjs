@@ -3,18 +3,40 @@ import {
   optimizeNarrationForSubtitles,
 } from "./subtitle-lines.mjs";
 
-/** Fixed CTA appended after the thematic「一句话总结」. */
+/** Fixed CTA appended after the thematic closing (zh). */
 const FIXED_CLOSING_NARRATION = "觉得有用就关注一下，我们下周见！";
+const FIXED_CLOSING_NARRATION_EN =
+  "If this was useful, follow for more — see you next week.";
 
-const appendFixedClosingCta = (closing) => {
+const MAX_SUBTITLE_CHARS_EN = 42;
+
+const normalizeLocale = (locale) =>
+  String(locale || "")
+    .trim()
+    .toLowerCase() === "en"
+    ? "en"
+    : "zh";
+
+const fixedCta = (locale) =>
+  normalizeLocale(locale) === "en"
+    ? FIXED_CLOSING_NARRATION_EN
+    : FIXED_CLOSING_NARRATION;
+
+const appendFixedClosingCta = (closing, locale = "zh") => {
   const base = String(closing || "").trim();
+  const cta = fixedCta(locale);
   if (!base) {
-    return FIXED_CLOSING_NARRATION;
+    return cta;
   }
-  if (base.includes(FIXED_CLOSING_NARRATION) || base.includes("我们下周见")) {
+  if (
+    base.includes(FIXED_CLOSING_NARRATION) ||
+    base.includes(FIXED_CLOSING_NARRATION_EN) ||
+    base.includes("我们下周见") ||
+    /see you next week/i.test(base)
+  ) {
     return base;
   }
-  return `${base}\n${FIXED_CLOSING_NARRATION}`;
+  return `${base}\n${cta}`;
 };
 
 const DEFAULT_BASE_URL =
@@ -60,7 +82,7 @@ const extractJsonObject = (text) => {
   }
 };
 
-const normalizeScriptPayload = (payload, props) => {
+const normalizeScriptPayload = (payload, props, locale = "zh") => {
   if (!payload || typeof payload !== "object") {
     throw new Error("逐字稿 JSON 结构无效");
   }
@@ -69,9 +91,8 @@ const normalizeScriptPayload = (payload, props) => {
   if (!intro) {
     throw new Error("逐字稿缺少 intro");
   }
-  const closingRaw = appendFixedClosingCta(payload.closing ?? "");
-  const closing =
-    optimizeNarrationForSubtitles(closingRaw) || closingRaw;
+  const closingRaw = appendFixedClosingCta(payload.closing ?? "", locale);
+  const closing = optimizeNarrationForSubtitles(closingRaw) || closingRaw;
   if (!closing) {
     throw new Error("逐字稿缺少 closing");
   }
@@ -106,7 +127,7 @@ const normalizeScriptPayload = (payload, props) => {
   };
 };
 
-const buildUserPrompt = (props) => {
+const buildUserPromptZh = (props) => {
   const cases = props.cases.map((item, index) => ({
     index: item.index,
     order: index + 1,
@@ -115,7 +136,6 @@ const buildUserPrompt = (props) => {
     date: item.date,
     metric: item.metric,
     shortDraft: item.subtitle,
-    /** 原始 MD 正文 —— 逐字稿必须据此充分改写，不能只写两三句 */
     markdownBody: item.sourceBody || item.subtitle || "",
   }));
 
@@ -162,7 +182,75 @@ ${JSON.stringify(
 )}`;
 };
 
-const callChatCompletions = async ({ apiKey, baseUrl, model }, props) => {
+const buildUserPromptEn = (props) => {
+  const cases = props.cases.map((item, index) => ({
+    index: item.index,
+    order: index + 1,
+    title: item.title,
+    author: item.author,
+    date: item.date,
+    metric: item.metric,
+    shortDraft: item.subtitle,
+    markdownBody: item.sourceBody || item.subtitle || "",
+  }));
+
+  return `Rewrite the following Indie Maker Weekly Markdown into spoken English narration for an image-above / subtitle-below video.
+
+Core rules:
+- Cover the main points in markdownBody / introMarkdown / closingMarkdown — do not compress to 2–3 sentences.
+- Keep facts, product names, and numbers; do not invent.
+- Short lines for on-screen subtitles; still write enough content.
+- closing: thematic takeaway only; the system appends this fixed CTA: ${FIXED_CLOSING_NARRATION_EN}
+
+Requirements:
+1. Output one JSON object only — no Markdown fences, no commentary.
+2. Shape: {"intro":"...","cases":[{"index":"01","narration":"..."},...],"closing":"..."}
+3. cases length must be ${props.cases.length}; keep the same index values.
+4. Conversational English; no URLs, emoji, or bullet symbols.
+5. Subtitles: each line ≤${MAX_SUBTITLE_CHARS_EN} characters; split on commas/periods; no punctuation inside a line.
+6. Use newlines inside intro / narration / closing for each subtitle line.
+7. Short bridges like "First up" may share a line with the next clause (space-separated).
+8. Length: each case narration ≥8 lines (aim 10–16); intro ≥4 lines; closing 2–4 lines of takeaway only (do not write follow/subscribe — system appends CTA).
+9. Format example only (real content must follow markdownBody):
+   First up Cool App
+   by @handle
+   Hit 1k stars in three months
+   Reactivated dormant users
+   Steady monetization
+
+Input:
+${JSON.stringify(
+  {
+    issueNumber: props.issueNumber,
+    theme: props.coverTitle,
+    coverBadge: props.coverBadge,
+    introShort: props.introSubtitle,
+    introMarkdown: props.introSourceBody || props.introSubtitle || "",
+    cases,
+    closingShort: props.closingSubtitle,
+    closingMarkdown: props.closingSourceBody || props.closingSubtitle || "",
+    fixedClosingCta: FIXED_CLOSING_NARRATION_EN,
+  },
+  null,
+  2,
+)}`;
+};
+
+const buildUserPrompt = (props, locale = "zh") =>
+  normalizeLocale(locale) === "en"
+    ? buildUserPromptEn(props)
+    : buildUserPromptZh(props);
+
+const callChatCompletions = async (
+  { apiKey, baseUrl, model },
+  props,
+  locale = "zh",
+) => {
+  const isEn = normalizeLocale(locale) === "en";
+  const system = isEn
+    ? `You write English spoken narration and subtitles. Output strict JSON. Expand from markdownBody / introMarkdown / closingMarkdown — never ultra-short summaries. Split each field into short subtitle lines (≤${MAX_SUBTITLE_CHARS_EN} chars); no commas or periods inside a line; ≥8 lines per case.`
+    : `你是中文口播与字幕编辑。输出严格 JSON。必须依据输入里的 markdownBody / introMarkdown / closingMarkdown 充分改写，覆盖原文要点，禁止只写极短摘要。每个字段用换行分成多行短字幕；行内不要写逗号或句号；每行不超过 ${MAX_SUBTITLE_CHARS} 个汉字；每个案例至少 8 行。`;
+
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
     headers: {
@@ -173,14 +261,8 @@ const callChatCompletions = async ({ apiKey, baseUrl, model }, props) => {
       model,
       temperature: 0.45,
       messages: [
-        {
-          role: "system",
-          content: `你是中文口播与字幕编辑。输出严格 JSON。必须依据输入里的 markdownBody / introMarkdown / closingMarkdown 充分改写，覆盖原文要点，禁止只写极短摘要。每个字段用换行分成多行短字幕；行内不要写逗号或句号；每行不超过 ${MAX_SUBTITLE_CHARS} 个汉字；每个案例至少 8 行。`,
-        },
-        {
-          role: "user",
-          content: buildUserPrompt(props),
-        },
+        { role: "system", content: system },
+        { role: "user", content: buildUserPrompt(props, locale) },
       ],
     }),
   });
@@ -211,9 +293,9 @@ const callChatCompletions = async ({ apiKey, baseUrl, model }, props) => {
 
 export const generateNarrationScript = async (props, options = {}) => {
   const config = getScriptLlmConfig();
+  const locale = normalizeLocale(options.locale);
   let enriched = props;
 
-  // If caller sends raw Markdown, re-parse so LLM gets full section bodies.
   const markdown =
     typeof options.markdown === "string" ? options.markdown.trim() : "";
   if (markdown) {
@@ -221,7 +303,7 @@ export const generateNarrationScript = async (props, options = {}) => {
       const { loadMarkdownRuntime } = await import("./markdown-runtime.mjs");
       const root = options.root || process.cwd();
       const runtime = await loadMarkdownRuntime(root);
-      const fromMd = runtime.parseMarkdownToVideo(markdown);
+      const fromMd = runtime.parseMarkdownToVideo(markdown, { locale });
       enriched = {
         ...props,
         introSourceBody:
@@ -248,9 +330,9 @@ export const generateNarrationScript = async (props, options = {}) => {
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
-      const content = await callChatCompletions(config, enriched);
+      const content = await callChatCompletions(config, enriched, locale);
       const payload = extractJsonObject(content);
-      return normalizeScriptPayload(payload, enriched);
+      return normalizeScriptPayload(payload, enriched, locale);
     } catch (error) {
       lastError = error;
     }

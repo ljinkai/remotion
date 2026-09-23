@@ -4,8 +4,34 @@
  */
 
 export const DEFAULT_AZURE_VOICE = "zh-CN-YunxiNeural";
+export const DEFAULT_EN_AZURE_VOICE = "en-US-JennyNeural";
 
 /** @typedef {{ id: string, name: string, gender: "Female"|"Male"|"Unknown", locale: string, localeName: string, styles?: string[] }} AzureVoiceOption */
+
+/** @type {AzureVoiceOption[]} */
+export const CURATED_ENGLISH_VOICES = [
+  {
+    id: "en-US-JennyNeural",
+    name: "Jenny",
+    gender: "Female",
+    locale: "en-US",
+    localeName: "English (US)",
+  },
+  {
+    id: "en-US-GuyNeural",
+    name: "Guy",
+    gender: "Male",
+    locale: "en-US",
+    localeName: "English (US)",
+  },
+  {
+    id: "en-GB-SoniaNeural",
+    name: "Sonia",
+    gender: "Female",
+    locale: "en-GB",
+    localeName: "English (UK)",
+  },
+];
 
 /** @type {AzureVoiceOption[]} */
 export const CURATED_CHINESE_VOICES = [
@@ -233,13 +259,22 @@ const isChineseLocale = (locale) => {
   return value.startsWith("zh-");
 };
 
-const normalizeVoice = (raw) => {
+const isEnglishLocale = (locale) => {
+  const value = String(locale || "").toLowerCase();
+  return value.startsWith("en-") || value === "en";
+};
+
+const normalizeVoice = (raw, { localeFilter = "zh" } = {}) => {
   const id = String(raw.ShortName || raw.Name || "").trim();
   if (!id) {
     return null;
   }
   const locale = String(raw.Locale || "").trim() || "zh-CN";
-  if (!isChineseLocale(locale)) {
+  if (localeFilter === "en") {
+    if (!isEnglishLocale(locale)) {
+      return null;
+    }
+  } else if (!isChineseLocale(locale)) {
     return null;
   }
   const genderRaw = String(raw.Gender || "Unknown");
@@ -269,10 +304,14 @@ const sortVoices = (voices) =>
   });
 
 /**
- * @param {{ key: string, region: string }} credentials
+ * @param {{ key: string, region: string, locale?: string }} credentials
  * @returns {Promise<AzureVoiceOption[]>}
  */
-export const fetchChineseVoicesFromAzure = async ({ key, region }) => {
+export const fetchChineseVoicesFromAzure = async ({
+  key,
+  region,
+  locale = "zh",
+}) => {
   const url = `https://${region}.tts.speech.microsoft.com/cognitiveservices/voices/list`;
   const response = await fetch(url, {
     headers: {
@@ -286,22 +325,26 @@ export const fetchChineseVoicesFromAzure = async ({ key, region }) => {
   if (!Array.isArray(payload)) {
     throw new Error("Azure voices list returned unexpected payload");
   }
+  const localeFilter = locale === "en" ? "en" : "zh";
   const voices = payload
-    .map(normalizeVoice)
+    .map((raw) => normalizeVoice(raw, { localeFilter }))
     .filter(Boolean)
     .filter((item) => String(item.id).includes("Neural"));
   return sortVoices(voices);
 };
 
 /**
- * @param {{ key?: string, region?: string }} [credentials]
+ * @param {{ key?: string, region?: string, locale?: string }} [credentials]
  */
 export const listChineseVoices = async (credentials = {}) => {
   const key = credentials.key?.trim();
   const region = credentials.region?.trim();
+  const locale = credentials.locale === "en" ? "en" : "zh";
+  const curated =
+    locale === "en" ? CURATED_ENGLISH_VOICES : CURATED_CHINESE_VOICES;
   if (key && region) {
     try {
-      const live = await fetchChineseVoicesFromAzure({ key, region });
+      const live = await fetchChineseVoicesFromAzure({ key, region, locale });
       if (live.length > 0) {
         return { voices: live, source: "azure" };
       }
@@ -312,8 +355,11 @@ export const listChineseVoices = async (credentials = {}) => {
       );
     }
   }
-  return { voices: sortVoices(CURATED_CHINESE_VOICES), source: "curated" };
+  return { voices: sortVoices(curated), source: "curated" };
 };
+
+export const defaultVoiceForLocale = (locale) =>
+  locale === "en" ? DEFAULT_EN_AZURE_VOICE : DEFAULT_AZURE_VOICE;
 
 export const isKnownChineseVoice = (voiceId, voices = CURATED_CHINESE_VOICES) => {
   const id = String(voiceId || "").trim();
