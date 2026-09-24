@@ -186,11 +186,13 @@ const Header: React.FC<{ video: WeeklyVideoProps }> = ({ video }) => {
     [0, 100],
     clamp,
   );
+  const site =
+    video.locale === "en" ? "soloez.com" : "ezindie.com";
 
   return (
     <div className="header">
       <span>
-        {video.headerTitle} ezindie.com
+        {video.headerTitle} {site}
       </span>
       <div className="progressTrack">
         <div className="progressFill" style={{ width: `${progress}%` }} />
@@ -307,13 +309,17 @@ const CoverScene: React.FC<{
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const showBottomChrome = frame >= fps;
+  const isEn = video.locale === "en";
   const brandSize = portrait ? 32 : 52;
-  const issueLabel = `第${video.issueNumber}期`;
+  const issueLabel = isEn
+    ? `Issue ${video.issueNumber}`
+    : `第${video.issueNumber}期`;
   const rawTheme = video.coverTitle.trim();
   const themeTitle =
     rawTheme &&
     stripIssueParen(rawTheme) !== video.headerTitle &&
-    rawTheme !== `${video.headerTitle}（第${video.issueNumber}期）`
+    rawTheme !== `${video.headerTitle}（第${video.issueNumber}期）` &&
+    rawTheme !== `${video.headerTitle} (Issue ${video.issueNumber})`
       ? stripIssueParen(rawTheme).replace(
           new RegExp(`^${video.headerTitle}[：:\\s]*`),
           "",
@@ -321,6 +327,11 @@ const CoverScene: React.FC<{
       : "";
   const heroTitle = themeTitle || issueLabel;
   const heroSize = fitCoverTitleSize(heroTitle, portrait);
+  const brandLabel = isEn
+    ? video.headerTitle
+    : video.headerTitle.endsWith("精选")
+      ? video.headerTitle
+      : `${video.headerTitle}-精选`;
 
   return (
     <AbsoluteFill className="coverSceneLayout">
@@ -329,9 +340,7 @@ const CoverScene: React.FC<{
         <div className="coverMain">
           <div className="coverBrandBlock">
             <p className="coverBrandName" style={{ fontSize: brandSize }}>
-              {video.headerTitle.endsWith("精选")
-                ? video.headerTitle
-                : `${video.headerTitle}-精选`}
+              {brandLabel}
             </p>
             <div
               className="coverBrandLine"
@@ -443,16 +452,18 @@ const CaseImage: React.FC<{
   );
 };
 
-const CaseScene: React.FC<{ item: WeeklyCase; portrait?: boolean }> = ({
-  item,
-  portrait = false,
-}) => {
+const CaseScene: React.FC<{
+  item: WeeklyCase;
+  portrait?: boolean;
+  locale?: "zh" | "en";
+}> = ({ item, portrait = false, locale = "zh" }) => {
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
   const progress = sceneProgress(frame, durationInFrames);
   const imageScale = interpolate(progress, [0, 1], [1.04, 1.01]);
   const imageY = interpolate(progress, [0, 1], [0, -16]);
   const meta = [item.author, item.date].filter(Boolean).join(" · ");
+  const metaFallback = locale === "en" ? "Featured" : "精选内容";
   const hasImageSrc = Boolean(item.image.trim());
   const [imageShape, setImageShape] = useState<ImageShape>("unknown");
   const [imageBroken, setImageBroken] = useState(false);
@@ -499,7 +510,7 @@ const CaseScene: React.FC<{ item: WeeklyCase; portrait?: boolean }> = ({
             <h2 style={{ fontSize: fitCaseTitleSize(item.title, portrait) }}>
               {item.title}
             </h2>
-            <p>{meta || "精选内容"}</p>
+            <p>{meta || metaFallback}</p>
           </div>
         </div>
         <strong className="caseMetric" style={{ color: item.color }}>
@@ -617,7 +628,11 @@ export const MyComponent: React.FC<WeeklyVideoProps> = (props) => {
               {item.audioSrc ? (
                 <Audio src={assetSrc(item.audioSrc)} volume={0.95} />
               ) : null}
-              <CaseScene item={item} portrait={portrait} />
+              <CaseScene
+                item={item}
+                portrait={portrait}
+                locale={video.locale}
+              />
             </Sequence>
           );
         }

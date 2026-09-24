@@ -37,6 +37,8 @@ export type WeeklyVideoProps = {
   closingSubtitle: string;
   /** Full closing Markdown body for 逐字稿 */
   closingSourceBody?: string;
+  /** Video language — drives cover chrome + narration defaults */
+  locale?: "zh" | "en";
   ticker: string;
   /** Visual template id — see videoTemplates.ts */
   templateId?: string;

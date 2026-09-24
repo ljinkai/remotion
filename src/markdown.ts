@@ -379,6 +379,7 @@ export const parseMarkdownToVideo = (
     closingTitle: closing?.title || closingTitleDefault,
     closingSubtitle: closingNarration,
     closingSourceBody: closingText || undefined,
+    locale,
     ticker: meta.ticker || defaultVideoProps.ticker,
     audioSrc: meta.audio || "",
     cases: cases.length > 0 ? cases : defaultVideoProps.cases,

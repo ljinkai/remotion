@@ -33,6 +33,8 @@ const savedTemplate = resolveTemplateId(
 const savedAspect = resolveAspect(localStorage.getItem("remotion-aspect"));
 const savedVoice =
   localStorage.getItem("remotion-voice") || "zh-CN-YunxiNeural";
+const savedWeeklyLocale =
+  localStorage.getItem("remotion-weekly-locale") === "en" ? "en" : "zh";
 
 function App() {
   const playerRef = useRef(null);
@@ -54,14 +56,21 @@ function App() {
   const [currentFrame, setCurrentFrame] = useState(0);
   const [editorTab, setEditorTab] = useState("markdown");
   const [xhsDraft, setXhsDraft] = useState(null);
+  const [weeklyLocale, setWeeklyLocale] = useState(savedWeeklyLocale);
+  const [weeklyIssues, setWeeklyIssues] = useState([]);
+  const [weeklyLoading, setWeeklyLoading] = useState(false);
+  const [weeklyFilling, setWeeklyFilling] = useState(null);
 
   const parsedProps = useMemo(
-    () => parseMarkdownToVideo(markdown),
-    [markdown],
+    () => parseMarkdownToVideo(markdown, { locale: weeklyLocale }),
+    [markdown, weeklyLocale],
   );
   const scriptedProps = useMemo(
-    () => (script ? applyNarrationScript(parsedProps, script) : parsedProps),
-    [parsedProps, script],
+    () =>
+      script
+        ? applyNarrationScript(parsedProps, script, weeklyLocale)
+        : parsedProps,
+    [parsedProps, script, weeklyLocale],
   );
   const props = useMemo(
     () => ({
@@ -120,7 +129,7 @@ function App() {
     let cancelled = false;
     (async () => {
       try {
-        const response = await fetch("/api/voices");
+        const response = await fetch(`/api/voices?locale=${weeklyLocale}`);
         const body = await response.json();
         if (!response.ok) {
           throw new Error(body.error || "加载音色列表失败");
@@ -130,7 +139,15 @@ function App() {
         }
         setVoices(Array.isArray(body.voices) ? body.voices : []);
         setVoicesSource(body.source || "");
-        if (
+        const defaultVoice =
+          body.defaultVoice ||
+          (weeklyLocale === "en" ? "en-US-JennyNeural" : "zh-CN-YunxiNeural");
+        const currentOk = (body.voices || []).some(
+          (item) => item.id === voiceId,
+        );
+        if (!currentOk) {
+          selectVoice(defaultVoice);
+        } else if (
           body.defaultVoice &&
           !localStorage.getItem("remotion-voice")
         ) {
@@ -145,7 +162,39 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [weeklyLocale]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setWeeklyLoading(true);
+    (async () => {
+      try {
+        const response = await fetch(
+          `/api/weekly/recent?limit=8&locale=${weeklyLocale}`,
+        );
+        const body = await response.json();
+        if (!response.ok) {
+          throw new Error(body.error || "加载周刊列表失败");
+        }
+        if (cancelled) {
+          return;
+        }
+        setWeeklyIssues(Array.isArray(body.issues) ? body.issues : []);
+      } catch (err) {
+        if (!cancelled) {
+          console.warn(err);
+          setWeeklyIssues([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setWeeklyLoading(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [weeklyLocale]);
 
   useEffect(() => {
     const player = playerRef.current;
@@ -169,6 +218,60 @@ function App() {
     setCurrentFrame(0);
     setError("");
     setStatus("");
+  };
+
+  const selectWeeklyLocale = (next) => {
+    const locale = next === "en" ? "en" : "zh";
+    if (locale === weeklyLocale) {
+      return;
+    }
+    setWeeklyLocale(locale);
+    localStorage.setItem("remotion-weekly-locale", locale);
+    setScript(null);
+    setSynthesizedProps(null);
+    setCurrentFrame(0);
+    setError("");
+    setStatus(locale === "en" ? "已切换英文生成逻辑" : "已切换中文生成逻辑");
+  };
+
+  const alignVoiceToLocale = (locale) => {
+    const isEn = locale === "en";
+    const currentIsEn = /^en[-_]/i.test(voiceId);
+    if (isEn === currentIsEn) {
+      return;
+    }
+    const preferred = isEn ? "en-US-JennyNeural" : "zh-CN-YunxiNeural";
+    const match = voices.find((item) => item.id === preferred);
+    const fallback = voices.find((item) =>
+      isEn ? /^en[-_]/i.test(item.id) : /^zh[-_]/i.test(item.id),
+    );
+    selectVoice(match?.id || fallback?.id || preferred);
+  };
+
+  const fillWeeklyIssue = async (issue) => {
+    setWeeklyFilling(issue);
+    setError("");
+    setStatus(`正在拉取第 ${issue} 期...`);
+    try {
+      const response = await fetch(
+        `/api/weekly/${issue}?locale=${weeklyLocale}`,
+      );
+      const body = await response.json();
+      if (!response.ok) {
+        throw new Error(body.error || "拉取周刊失败");
+      }
+      updateMarkdown(body.markdown || "");
+      alignVoiceToLocale(weeklyLocale);
+      setEditorTab("markdown");
+      setStatus(
+        `已填充第 ${issue} 期（${body.source === "github" ? "GitHub" : "本地"}）`,
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setStatus("");
+    } finally {
+      setWeeklyFilling(null);
+    }
   };
 
   const loadFile = async (file) => {
@@ -224,14 +327,24 @@ function App() {
   const generateScript = async () => {
     setScripting(true);
     setError("");
-    setStatus("正在生成逐字稿...");
+    setStatus(
+      weeklyLocale === "en"
+        ? "Generating English narration script..."
+        : "正在生成逐字稿...",
+    );
     try {
-      const fromMarkdown = tryBuildScriptFromMarkdown(markdown);
+      const fromMarkdown = tryBuildScriptFromMarkdown(markdown, {
+        locale: weeklyLocale,
+      });
       if (fromMarkdown) {
         setScript(formatScript(fromMarkdown));
         setSynthesizedProps(null);
         setEditorTab("script");
-        setStatus("已从 Markdown 旁白载入逐字稿（已按字幕行拆分）");
+        setStatus(
+          weeklyLocale === "en"
+            ? "Loaded narration from Markdown (EN)"
+            : "已从 Markdown 旁白载入逐字稿（已按字幕行拆分）",
+        );
         return;
       }
 
@@ -241,6 +354,7 @@ function App() {
         body: JSON.stringify({
           props: parsedProps,
           markdown,
+          locale: weeklyLocale,
         }),
       });
       const body = await response.json();
@@ -250,7 +364,11 @@ function App() {
       setScript(formatScript(body.script));
       setSynthesizedProps(null);
       setEditorTab("script");
-      setStatus("千问逐字稿已生成（已按字幕行拆分），可编辑后再合成");
+      setStatus(
+        weeklyLocale === "en"
+          ? "English narration script ready — edit then synthesize"
+          : "千问逐字稿已生成（已按字幕行拆分），可编辑后再合成",
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setStatus("");
@@ -271,7 +389,11 @@ function App() {
       const response = await fetch("/api/synthesize", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ props: scriptedProps, voice: voiceId }),
+        body: JSON.stringify({
+          props: scriptedProps,
+          voice: voiceId,
+          locale: weeklyLocale,
+        }),
       });
       const body = await response.json();
       if (!response.ok) {
@@ -307,7 +429,7 @@ function App() {
       const response = await fetch("/api/voice-preview", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ voice: voiceId }),
+        body: JSON.stringify({ voice: voiceId, locale: weeklyLocale }),
       });
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
@@ -362,7 +484,12 @@ function App() {
     setCurrentFrame(frame);
   };
 
-  const busy = rendering || synthesizing || scripting || previewingVoice;
+  const busy =
+    rendering ||
+    synthesizing ||
+    scripting ||
+    previewingVoice ||
+    weeklyFilling != null;
 
   return (
     <main className="shell">
@@ -383,6 +510,54 @@ function App() {
               导入 MD
             </button>
           </label>
+        </div>
+
+        <div className="weeklyPicker">
+          <div className="weeklyPickerHead">
+            <strong>语言 / 最近周刊</strong>
+            <div className="seg">
+              <button
+                type="button"
+                className={weeklyLocale === "zh" ? "active" : ""}
+                disabled={busy}
+                onClick={() => selectWeeklyLocale("zh")}
+              >
+                中文
+              </button>
+              <button
+                type="button"
+                className={weeklyLocale === "en" ? "active" : ""}
+                disabled={busy}
+                onClick={() => selectWeeklyLocale("en")}
+              >
+                EN
+              </button>
+            </div>
+          </div>
+          {weeklyLoading ? (
+            <p className="weeklyEmpty">加载期号中…</p>
+          ) : weeklyIssues.length === 0 ? (
+            <p className="weeklyEmpty">暂无可用期号（检查本地目录或 GitHub）</p>
+          ) : (
+            <div className="weeklyList">
+              {weeklyIssues.map((item) => (
+                <div className="weeklyRow" key={`${weeklyLocale}-${item.issue}`}>
+                  <span className="issueNo">#{item.issue}</span>
+                  <span className="issueTitle" title={item.title}>
+                    {item.title}
+                  </span>
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={busy}
+                    onClick={() => fillWeeklyIssue(item.issue)}
+                  >
+                    {weeklyFilling === item.issue ? "拉取中" : "填充"}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="editorTabs" role="tablist">

@@ -11,7 +11,7 @@ import { embedLocalAudioAsDataUrls } from "./embed-audio-data-urls.mjs";
 import { generateNarrationScript } from "./script-llm.mjs";
 import { getAzureSpeechConfig, synthesizeScene } from "./azure-tts.mjs";
 import {
-  DEFAULT_AZURE_VOICE,
+  defaultVoiceForLocale,
   formatVoiceLabel,
   listChineseVoices,
   resolveVoiceId,
@@ -19,6 +19,10 @@ import {
 import { createQueuedJob, publicJobView, readJob } from "./render-job-store.mjs";
 import { enqueueRenderJob } from "./render-job-worker.mjs";
 import { normalizeRenderJobOptions } from "./render-job-options.mjs";
+import {
+  listRecentWeeklyIssues,
+  loadWeeklyIssueMarkdown,
+} from "./weekly-issues.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 dotenv.config({ path: path.join(root, ".env") });
@@ -320,6 +324,65 @@ const renderWorkbenchHtml = () => `<!doctype html>
       }
       .status { min-height: 20px; margin-top: 8px; color: #536170; font-size: 12px; flex: 0 0 auto; }
       .status.error { color: #b42318; }
+      .weeklyPicker {
+        flex: 0 0 auto;
+        margin-bottom: 10px;
+        padding: 8px 10px;
+        border: 1px solid #dde3ea;
+        border-radius: 8px;
+        background: #f8fafc;
+      }
+      .weeklyPickerHead {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+      .weeklyPickerHead strong {
+        font-size: 12px;
+        color: #17202a;
+      }
+      .weeklyList {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        max-height: 168px;
+        overflow: auto;
+      }
+      .weeklyRow {
+        display: grid;
+        grid-template-columns: 44px minmax(0, 1fr) auto;
+        gap: 8px;
+        align-items: center;
+        padding: 6px 8px;
+        border-radius: 6px;
+        background: #fff;
+        border: 1px solid #e6ebf0;
+      }
+      .weeklyRow .issueNo {
+        font-size: 12px;
+        font-weight: 800;
+        color: #0f766e;
+      }
+      .weeklyRow .issueTitle {
+        min-width: 0;
+        font-size: 12px;
+        line-height: 1.35;
+        color: #17202a;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .weeklyRow button {
+        padding: 5px 10px;
+        font-size: 12px;
+      }
+      .weeklyEmpty {
+        margin: 0;
+        font-size: 12px;
+        color: #687586;
+      }
       .scriptPanel {
         flex: 1;
         min-height: 0;
@@ -662,6 +725,38 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "GET" && pathname === "/api/weekly/recent") {
+      try {
+        const limit = Number(url.searchParams.get("limit") || 8);
+        const locale = url.searchParams.get("locale") || "zh";
+        const payload = await listRecentWeeklyIssues(root, { limit, locale });
+        sendJson(res, 200, payload);
+      } catch (error) {
+        sendJson(res, 500, {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+      return;
+    }
+
+    const weeklyIssueMatch = pathname.match(/^\/api\/weekly\/(\d+)$/);
+    if (req.method === "GET" && weeklyIssueMatch) {
+      try {
+        const locale = url.searchParams.get("locale") || "zh";
+        const payload = await loadWeeklyIssueMarkdown(
+          root,
+          weeklyIssueMatch[1],
+          { locale },
+        );
+        sendJson(res, 200, payload);
+      } catch (error) {
+        sendJson(res, 404, {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+      return;
+    }
+
     if (req.method === "GET" && pathname === "/api/voices") {
       try {
         let credentials = {};
@@ -670,9 +765,12 @@ const server = createServer(async (req, res) => {
         } catch {
           // curated fallback when Azure env is missing
         }
-        const result = await listChineseVoices(credentials);
+        const locale =
+          url.searchParams.get("locale") === "en" ? "en" : "zh";
+        const result = await listChineseVoices({ ...credentials, locale });
         sendJson(res, 200, {
-          defaultVoice: DEFAULT_AZURE_VOICE,
+          locale,
+          defaultVoice: defaultVoiceForLocale(locale),
           source: result.source,
           voices: result.voices.map((voice) => ({
             ...voice,
@@ -689,11 +787,17 @@ const server = createServer(async (req, res) => {
 
     if (req.method === "POST" && pathname === "/api/voice-preview") {
       const body = await readJson(req);
-      const voice = resolveVoiceId(body.voice, DEFAULT_AZURE_VOICE);
+      const locale = body.locale === "en" ? "en" : "zh";
+      const voice = resolveVoiceId(
+        body.voice,
+        defaultVoiceForLocale(locale),
+      );
       const text =
         typeof body.text === "string" && body.text.trim()
           ? body.text.trim().slice(0, 120)
-          : "你好，我是独立开发变现周刊的旁白音色，欢迎收听本期精选。";
+          : locale === "en"
+            ? "Hi, this is the Indie Maker Weekly narrator. Welcome to this week's picks."
+            : "你好，我是独立开发变现周刊的旁白音色，欢迎收听本期精选。";
       const previewDir = path.join(tmpDir, "voice-preview");
       await mkdir(previewDir, { recursive: true });
       const safeVoice = voice.replace(/[^a-zA-Z0-9_-]/g, "_");
@@ -730,11 +834,13 @@ const server = createServer(async (req, res) => {
         sendJson(res, 400, { error: "props.cases 不能为空" });
         return;
       }
+      const locale = body.locale === "en" ? "en" : "zh";
       const script = await generateNarrationScript(body.props, {
         markdown: body.markdown,
         root,
+        locale,
       });
-      sendJson(res, 200, { script });
+      sendJson(res, 200, { script, locale });
       return;
     }
 
@@ -744,7 +850,11 @@ const server = createServer(async (req, res) => {
         sendJson(res, 400, { error: "缺少 props" });
         return;
       }
-      const voice = resolveVoiceId(body.voice, DEFAULT_AZURE_VOICE);
+      const locale = body.locale === "en" ? "en" : "zh";
+      const voice = resolveVoiceId(
+        body.voice,
+        defaultVoiceForLocale(locale),
+      );
       const result = await synthesizeVideoProps(body.props, { root, voice });
       sendJson(res, 200, result);
       return;
