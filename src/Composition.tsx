@@ -516,15 +516,16 @@ const CaseScene: React.FC<{
               onShape={setImageShape}
               onBroken={() => setImageBroken(true)}
             />
-          ) : null}
-          <div
-            className={`fallbackPoster${showFallbackOnly ? " fallbackPoster--solo" : ""}`}
-            style={{ borderColor: item.color }}
-          >
-            <span style={{ color: item.color }}>{item.index}</span>
-            <strong>{item.fallback || item.title}</strong>
-            <small>{item.title}</small>
-          </div>
+          ) : (
+            <div
+              className="fallbackPoster fallbackPoster--solo"
+              style={{ borderColor: item.color }}
+            >
+              <span style={{ color: item.color }}>{item.index}</span>
+              <strong>{item.fallback || item.title}</strong>
+              <small>{item.title}</small>
+            </div>
+          )}
         </div>
       </div>
 
