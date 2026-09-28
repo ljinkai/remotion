@@ -11,6 +11,17 @@ export type VideoFormat = {
 
 export const DEFAULT_ASPECT: VideoAspect = "portrait";
 
+/**
+ * 1080×1920 caption insets so Xiaohongshu / Bilibili chrome does not cover
+ * burned-in subtitles. Bottom ~20% (Bilibili title+progress, also covers XHS
+ * ~15% caption bar). Right ~13% for Bilibili coin/like column.
+ */
+export const PORTRAIT_CAPTION_INSET = {
+  bottomPx: 400,
+  leftPx: 48,
+  rightPx: 140,
+} as const;
+
 export const VIDEO_FORMATS: VideoFormat[] = [
   {
     id: "portrait",

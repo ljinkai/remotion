@@ -491,25 +491,28 @@ export const getActiveCue = (
   cues: SubtitleCue[] | undefined,
   sceneMs: number,
   fallbackText: string,
+  maxLines = 1,
 ): string => {
-  const singleLine = (value: string) =>
+  const takeLines = (value: string) =>
     String(value || "")
       .split(/\n+/)
       .map((item) => item.trim())
-      .find(Boolean) || "";
+      .filter(Boolean)
+      .slice(0, Math.max(1, maxLines))
+      .join("\n");
 
   if (!cues || cues.length === 0) {
-    return singleLine(fallbackText);
+    return takeLines(fallbackText);
   }
   const active = cues.find(
     (cue) => sceneMs >= cue.startMs && sceneMs < cue.endMs,
   );
   if (active) {
-    return singleLine(active.text);
+    return takeLines(active.text);
   }
   const last = cues[cues.length - 1];
   if (sceneMs >= last.endMs) {
-    return singleLine(last.text);
+    return takeLines(last.text);
   }
-  return singleLine(cues[0]?.text || fallbackText);
+  return takeLines(cues[0]?.text || fallbackText);
 };

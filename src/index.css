@@ -623,8 +623,8 @@ body {
   align-items: stretch;
   justify-content: flex-start;
   gap: 0;
-  /* Top title card only — leave mid/lower collage open */
-  padding: 108px 36px 280px;
+  /* Top title card — collage fills down to the raised caption band */
+  padding: 108px 36px 40px;
 }
 
 .scene[data-aspect="portrait"] .coverBrandBlock {
@@ -659,8 +659,9 @@ body {
 
 .scene[data-aspect="portrait"] .coverBadge {
   position: absolute;
-  right: 36px;
-  bottom: 168px;
+  left: 48px;
+  right: auto;
+  bottom: 16px;
   align-self: auto;
   max-width: min(72%, 420px);
   margin-bottom: 0;
@@ -680,17 +681,24 @@ body {
 }
 
 .scene[data-aspect="portrait"] .coverSceneLayout .sceneSubtitleRegion {
-  margin: 0 28px 36px;
-  min-height: 120px;
-  padding: 18px 24px;
+  min-height: 112px;
+  max-height: 168px;
+  padding: 8px 4px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
 }
 
 .scene[data-aspect="portrait"] .coverSceneLayout .sceneSubtitleText {
-  font-size: 30px;
+  color: #ffffff;
+  font-weight: 950;
+  white-space: pre-wrap;
+  overflow: hidden;
+  text-overflow: clip;
 }
 
 .scene[data-aspect="portrait"] .caseSceneLayout {
-  padding: 120px 36px 28px;
+  padding: 120px 36px 0;
   gap: 14px;
 }
 
@@ -730,18 +738,44 @@ body {
 }
 
 .scene[data-aspect="portrait"] .sceneSubtitleRegion {
-  margin: 0 20px 28px;
-  min-height: 100px;
-  max-height: 200px;
-  padding: 14px 20px;
+  min-height: 112px;
+  max-height: 168px;
+  padding: 8px 4px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .scene[data-aspect="portrait"] .sceneSubtitleText {
-  max-width: 920px;
+  max-width: 100%;
+  color: #ffffff;
+  font-weight: 950;
+  letter-spacing: 0.03em;
+  white-space: pre-wrap;
+  overflow: hidden;
+  text-overflow: clip;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  /* Open caption: white fill + 4px black stroke + light drop */
+  text-shadow:
+    -4px -4px 0 #000,
+    4px -4px 0 #000,
+    -4px 4px 0 #000,
+    4px 4px 0 #000,
+    -4px 0 0 #000,
+    4px 0 0 #000,
+    0 -4px 0 #000,
+    0 4px 0 #000,
+    0 6px 12px rgba(0, 0, 0, 0.5);
 }
 
 .scene[data-aspect="portrait"] .closingScene {
-  padding: 120px 48px 24px;
+  padding: 120px 48px 0;
 }
 
 .scene[data-aspect="portrait"] .closingScene h2 {

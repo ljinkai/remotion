@@ -24,7 +24,7 @@ import {
 } from "./videoData";
 import { ensureSingleLineCues } from "./subtitleLines";
 import { getVideoTemplate } from "./videoTemplates";
-import { getVideoFormat } from "./videoFormats";
+import { getVideoFormat, PORTRAIT_CAPTION_INSET } from "./videoFormats";
 import {
   FIXED_CLOSING_NARRATION,
   splitClosingSummaryAndCta,
@@ -118,18 +118,26 @@ export const fitCaseTitleSize = (title: string, portrait = false) => {
 };
 
 export const fitSubtitleSize = (text: string, portrait = false) => {
-  const len = [...text.trim()].length;
-  let size = 34;
-  if (len <= 28) {
-    size = 34;
-  } else if (len <= 48) {
-    size = 30;
-  } else if (len <= 72) {
-    size = 26;
-  } else {
-    size = 24;
+  const len = [...text.replace(/\n/g, "").trim()].length;
+  if (portrait) {
+    if (len <= 16) {
+      return 44;
+    }
+    if (len <= 22) {
+      return 40;
+    }
+    return 38;
   }
-  return portrait ? Math.round(size * 0.9) : size;
+  if (len <= 28) {
+    return 34;
+  }
+  if (len <= 48) {
+    return 30;
+  }
+  if (len <= 72) {
+    return 26;
+  }
+  return 24;
 };
 
 export const assetSrc = (src: string) => {
@@ -159,14 +167,25 @@ const SceneSubtitles: React.FC<{
   const sceneMs = (frame / fps) * 1000;
   const durationMs = (durationInFrames / fps) * 1000;
   const lineCues = ensureSingleLineCues(cues, fallbackText, durationMs);
-  const text = getActiveCue(lineCues, sceneMs, "").split(/\n/)[0]?.trim() || "";
+  const text = getActiveCue(lineCues, sceneMs, "", portrait ? 2 : 1);
 
   if (!text) {
     return null;
   }
 
   return (
-    <div className="sceneSubtitleRegion">
+    <div
+      className="sceneSubtitleRegion"
+      style={
+        portrait
+          ? {
+              marginLeft: PORTRAIT_CAPTION_INSET.leftPx,
+              marginRight: PORTRAIT_CAPTION_INSET.rightPx,
+              marginBottom: PORTRAIT_CAPTION_INSET.bottomPx,
+            }
+          : undefined
+      }
+    >
       <p
         className="sceneSubtitleText"
         style={{ fontSize: fitSubtitleSize(text, portrait) }}
@@ -374,7 +393,13 @@ const CoverScene: React.FC<{
               className="coverBadge"
               style={
                 portrait
-                  ? { fontSize: 28, padding: "16px 20px" }
+                  ? {
+                      fontSize: 28,
+                      padding: "16px 20px",
+                      left: PORTRAIT_CAPTION_INSET.leftPx,
+                      right: "auto",
+                      bottom: 16,
+                    }
                   : undefined
               }
             >
