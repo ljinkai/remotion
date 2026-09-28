@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { access, mkdir, readFile, writeFile, cp } from "node:fs/promises";
 import path from "node:path";
 
-const CACHE_VERSION = 1;
+const CACHE_VERSION = 2;
 
 const exists = async (filePath) => {
   try {

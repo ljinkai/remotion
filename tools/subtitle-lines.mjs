@@ -301,10 +301,44 @@ export const buildProvisionalCues = (raw, durationMs) => {
   });
 };
 
-const normalizeCueChars = (value) =>
-  String(value || "")
-    .replace(/\s+/g, "")
-    .replace(/[。！？!?，、；;：:·．.]/g, "");
+const isPunctuationEvent = (text) =>
+  /^[。！？!?，、；;：:\s]+$/u.test(String(text || "").trim());
+
+/** UTF-16 ranges of each display line inside `lines.join("。") + "。"`. */
+export const speechLineRanges = (lines) => {
+  const ranges = [];
+  let cursor = 0;
+  for (const line of lines) {
+    const start = cursor;
+    const end = start + String(line).length;
+    ranges.push({ start, end });
+    cursor = end + 1;
+  }
+  return ranges;
+};
+
+const splitWindowByCharWeight = (lines, startMs, endMs) => {
+  if (lines.length === 0) {
+    return [];
+  }
+  if (lines.length === 1) {
+    return [{ text: lines[0], startMs, endMs: Math.max(endMs, startMs + 160) }];
+  }
+  const weights = lines.map((line) => Math.max(charLen(line), 1));
+  const totalWeight = weights.reduce((sum, item) => sum + item, 0) || 1;
+  const span = Math.max(endMs - startMs, lines.length * 160);
+  const starts = [startMs];
+  let consumed = 0;
+  for (let index = 0; index < lines.length - 1; index += 1) {
+    consumed += weights[index] ?? 1;
+    starts.push(Math.round(startMs + (span * consumed) / totalWeight));
+  }
+  return lines.map((text, index) => ({
+    text,
+    startMs: starts[index] ?? startMs,
+    endMs: index === lines.length - 1 ? endMs : (starts[index + 1] ?? endMs),
+  }));
+};
 
 export const buildTimedSubtitleCues = (raw, durationMs, boundaries = []) => {
   const lines = splitSubtitleLines(raw);
@@ -315,66 +349,58 @@ export const buildTimedSubtitleCues = (raw, durationMs, boundaries = []) => {
   const total = Math.max(Number(durationMs) || 0, lines.length * 700);
   const wordEvents = (boundaries || []).filter((item) => {
     const text = String(item?.text || "").trim();
-    return text.length > 0 && !/^[。！？!?，、；;：:\s]+$/u.test(text);
+    return text.length > 0 && !isPunctuationEvent(text);
   });
+  const offsetEvents = wordEvents.filter((item) =>
+    Number.isFinite(Number(item.textOffset)),
+  );
 
-  if (wordEvents.length < 2) {
-    return buildProvisionalCues(lines.join("\n"), total);
+  if (offsetEvents.length === 0) {
+    return buildProvisionalCues(lines.join("。"), total);
   }
 
-  let eventIndex = 0;
-  let spokenNorm = "";
-  const cues = [];
-
-  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
-    const line = lines[lineIndex];
-    const target = normalizeCueChars(line);
-    const startEvent =
-      wordEvents[Math.min(eventIndex, wordEvents.length - 1)] ?? wordEvents[0];
-    const startMs = Math.max(
-      0,
-      Number(startEvent?.audioOffsetMs) || cues.at(-1)?.endMs || 0,
+  const ranges = speechLineRanges(lines);
+  const wordsByLine = lines.map(() => []);
+  for (const event of offsetEvents) {
+    const offset = Number(event.textOffset);
+    const lineIndex = ranges.findIndex(
+      (range) => offset >= range.start && offset < range.end,
     );
-    const startNormLen = spokenNorm.length;
-
-    while (
-      eventIndex < wordEvents.length &&
-      spokenNorm.length - startNormLen < Math.max(target.length, 1)
-    ) {
-      spokenNorm += normalizeCueChars(String(wordEvents[eventIndex]?.text || ""));
-      eventIndex += 1;
-      if (spokenNorm.length - startNormLen >= target.length) {
-        break;
-      }
+    if (lineIndex >= 0) {
+      wordsByLine[lineIndex]?.push(event);
     }
+  }
 
-    const endEvent =
-      wordEvents[Math.max(Math.min(eventIndex, wordEvents.length) - 1, 0)] ??
-      startEvent;
-    let endMs =
-      Number(endEvent?.audioOffsetMs || 0) + Number(endEvent?.durationMs || 0);
-    if (lineIndex === lines.length - 1) {
-      endMs = total;
+  const firstWordMs = (index) => {
+    const first = wordsByLine[index]?.[0];
+    if (!first) {
+      return null;
     }
-    cues.push({
-      text: line,
+    const ms = Number(first.audioOffsetMs);
+    return Number.isFinite(ms) ? Math.max(0, ms) : null;
+  };
+
+  const starts = lines.map(() => 0);
+  starts[0] = 0;
+  for (let index = 1; index < lines.length; index += 1) {
+    const ms = firstWordMs(index);
+    const previous = starts[index - 1] ?? 0;
+    starts[index] = ms == null ? previous + 200 : ms;
+    if ((starts[index] ?? 0) < previous) {
+      starts[index] = previous;
+    }
+  }
+
+  return lines.map((text, index) => {
+    const startMs = starts[index] ?? 0;
+    const endMs =
+      index === lines.length - 1 ? total : (starts[index + 1] ?? total);
+    return {
+      text,
       startMs,
-      endMs: Math.max(endMs, startMs + 200),
-    });
-  }
-
-  for (let index = 1; index < cues.length; index += 1) {
-    if (cues[index].startMs < cues[index - 1].endMs) {
-      cues[index].startMs = cues[index - 1].endMs;
-    }
-    if (cues[index].endMs <= cues[index].startMs) {
-      cues[index].endMs = cues[index].startMs + 200;
-    }
-  }
-  if (cues.length > 0) {
-    cues[cues.length - 1].endMs = Math.max(cues[cues.length - 1].endMs, total);
-  }
-  return cues;
+      endMs: Math.max(endMs, startMs + 160),
+    };
+  });
 };
 
 export const ensureSingleLineCues = (cues, fallbackRaw, durationMs) => {
@@ -392,20 +418,7 @@ export const ensureSingleLineCues = (cues, fallbackRaw, durationMs) => {
       }
       continue;
     }
-    const span = Math.max(cue.endMs - cue.startMs, lines.length * 200);
-    const slice = span / lines.length;
-    lines.forEach((line, index) => {
-      const startMs = Math.round(cue.startMs + index * slice);
-      const endMs =
-        index === lines.length - 1
-          ? cue.endMs
-          : Math.round(cue.startMs + (index + 1) * slice);
-      expanded.push({
-        text: line,
-        startMs,
-        endMs: Math.max(endMs, startMs + 160),
-      });
-    });
+    expanded.push(...splitWindowByCharWeight(lines, cue.startMs, cue.endMs));
   }
   return expanded.length > 0
     ? expanded

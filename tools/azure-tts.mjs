@@ -54,8 +54,8 @@ export const synthesizeScene = async (text, outputPath, options = {}) => {
       text: event.text,
       audioOffsetMs: ticksToMs(event.audioOffset),
       durationMs: ticksToMs(event.duration),
-      textOffset: event.textOffset,
-      wordLength: event.wordLength,
+      textOffset: Number(event.textOffset),
+      wordLength: Number(event.wordLength),
       boundaryType: event.boundaryType,
     });
   };
