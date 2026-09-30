@@ -39,6 +39,11 @@ export type WeeklyVideoProps = {
   closingSourceBody?: string;
   /** Video language — drives cover chrome + narration defaults */
   locale?: "zh" | "en";
+  /**
+   * Selected weekly-cover backdrop URLs (1–3). When set, CoverScene uses these
+   * for the magazine collage instead of deriving from case images.
+   */
+  coverImages?: string[];
   ticker: string;
   /** Visual template id — see videoTemplates.ts */
   templateId?: string;
@@ -208,6 +213,18 @@ export const normalizeVideoProps = (
       ? defaultVideoProps.coverTitle
       : "";
 
+  const coverImages = Array.isArray(source.coverImages)
+    ? source.coverImages
+        .map((u) => (typeof u === "string" ? u.trim() : ""))
+        .filter(Boolean)
+        .slice(0, 3)
+    : undefined;
+
+  const locale =
+    source.locale === "en" || source.locale === "zh"
+      ? source.locale
+      : undefined;
+
   return {
     issueNumber: clean(source.issueNumber, defaultVideoProps.issueNumber),
     headerTitle,
@@ -231,6 +248,8 @@ export const normalizeVideoProps = (
       typeof source.closingSourceBody === "string"
         ? source.closingSourceBody.trim() || undefined
         : undefined,
+    locale,
+    coverImages: coverImages && coverImages.length > 0 ? coverImages : undefined,
     ticker: clean(source.ticker, defaultVideoProps.ticker),
     templateId: resolveTemplateId(source.templateId),
     aspect: resolveAspect(source.aspect),

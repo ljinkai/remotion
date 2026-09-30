@@ -227,52 +227,162 @@ type CoverTileLayout = {
   height: string;
   driftX: number;
   driftY: number;
-  rotate: number;
   z: number;
 };
 
-const LANDSCAPE_COVER_TILES: CoverTileLayout[] = [
-  { top: "-4%", left: "-2%", width: "46%", height: "58%", driftX: -28, driftY: 18, rotate: -2.5, z: 1 },
-  { top: "8%", left: "38%", width: "42%", height: "48%", driftX: 22, driftY: -16, rotate: 1.8, z: 2 },
-  { top: "42%", left: "68%", width: "36%", height: "52%", driftX: 18, driftY: 24, rotate: -1.2, z: 3 },
-  { top: "52%", left: "8%", width: "34%", height: "46%", driftX: -16, driftY: 20, rotate: 2.2, z: 2 },
-  { top: "-6%", left: "72%", width: "30%", height: "40%", driftX: 14, driftY: -12, rotate: 3, z: 1 },
-  { top: "58%", left: "48%", width: "28%", height: "38%", driftX: -10, driftY: 14, rotate: -2, z: 1 },
-];
+/** Landscape magazine grids — mirrors weekly_cover._COVER_LAYOUTS (16:9). */
+const LANDSCAPE_COVER_GRIDS: Record<number, CoverTileLayout[]> = {
+  1: [
+    {
+      top: "0%",
+      left: "0%",
+      width: "100%",
+      height: "100%",
+      driftX: 12,
+      driftY: -10,
+      z: 1,
+    },
+  ],
+  2: [
+    {
+      top: "4.5%",
+      left: "3%",
+      width: "54.5%",
+      height: "91%",
+      driftX: -14,
+      driftY: 10,
+      z: 2,
+    },
+    {
+      top: "4.5%",
+      left: "59.5%",
+      width: "37.5%",
+      height: "91%",
+      driftX: 12,
+      driftY: -8,
+      z: 1,
+    },
+  ],
+  3: [
+    {
+      top: "4.5%",
+      left: "3%",
+      width: "54.5%",
+      height: "91%",
+      driftX: -12,
+      driftY: 10,
+      z: 2,
+    },
+    {
+      top: "4.5%",
+      left: "59.5%",
+      width: "37.5%",
+      height: "43.5%",
+      driftX: 10,
+      driftY: -8,
+      z: 1,
+    },
+    {
+      top: "52%",
+      left: "59.5%",
+      width: "37.5%",
+      height: "43.5%",
+      driftX: 8,
+      driftY: 12,
+      z: 1,
+    },
+  ],
+};
 
-const PORTRAIT_COVER_TILES: CoverTileLayout[] = [
-  { top: "-2%", left: "-6%", width: "62%", height: "36%", driftX: -18, driftY: 14, rotate: -2, z: 1 },
-  { top: "8%", left: "42%", width: "64%", height: "32%", driftX: 16, driftY: -12, rotate: 1.6, z: 2 },
-  { top: "34%", left: "-4%", width: "58%", height: "30%", driftX: -14, driftY: 18, rotate: 2, z: 2 },
-  { top: "42%", left: "48%", width: "58%", height: "34%", driftX: 12, driftY: 16, rotate: -1.4, z: 3 },
-  { top: "68%", left: "6%", width: "54%", height: "30%", driftX: -10, driftY: 12, rotate: 1.2, z: 1 },
-  { top: "72%", left: "52%", width: "52%", height: "28%", driftX: 10, driftY: -8, rotate: -2.2, z: 2 },
-];
+/** Portrait magazine grids — axis-swapped for 9:16 (big top + stacked bottom). */
+const PORTRAIT_COVER_GRIDS: Record<number, CoverTileLayout[]> = {
+  1: [
+    {
+      top: "0%",
+      left: "0%",
+      width: "100%",
+      height: "100%",
+      driftX: 8,
+      driftY: -14,
+      z: 1,
+    },
+  ],
+  2: [
+    {
+      top: "3%",
+      left: "4%",
+      width: "92%",
+      height: "45.5%",
+      driftX: -8,
+      driftY: 10,
+      z: 2,
+    },
+    {
+      top: "51%",
+      left: "4%",
+      width: "92%",
+      height: "45.5%",
+      driftX: 8,
+      driftY: -8,
+      z: 1,
+    },
+  ],
+  3: [
+    {
+      top: "3%",
+      left: "4%",
+      width: "92%",
+      height: "48%",
+      driftX: -6,
+      driftY: 10,
+      z: 2,
+    },
+    {
+      top: "53.5%",
+      left: "4%",
+      width: "44%",
+      height: "43%",
+      driftX: -8,
+      driftY: 8,
+      z: 1,
+    },
+    {
+      top: "53.5%",
+      left: "52%",
+      width: "44%",
+      height: "43%",
+      driftX: 8,
+      driftY: -6,
+      z: 1,
+    },
+  ],
+};
 
 const CoverImageBackdrop: React.FC<{
-  cases: WeeklyCase[];
+  images: string[];
   portrait: boolean;
-}> = ({ cases, portrait }) => {
+}> = ({ images, portrait }) => {
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
-  const images = cases
-    .map((item) => item.image.trim())
-    .filter(Boolean)
-    .slice(0, 6);
-  const layouts = portrait ? PORTRAIT_COVER_TILES : LANDSCAPE_COVER_TILES;
+  const urls = images.map((src) => src.trim()).filter(Boolean).slice(0, 3);
+  const n = urls.length;
+  const grids = portrait ? PORTRAIT_COVER_GRIDS : LANDSCAPE_COVER_GRIDS;
+  const layouts = grids[n] || grids[3];
 
-  if (images.length === 0) {
+  if (n === 0) {
     return <AbsoluteFill className="coverBackdrop coverBackdrop--empty" />;
   }
 
+  const fullBleed = n === 1;
+
   return (
     <AbsoluteFill className="coverBackdrop">
-      {images.map((src, index) => {
+      {urls.map((src, index) => {
         const layout = layouts[index % layouts.length];
         const zoom = interpolate(
           frame,
           [0, Math.max(durationInFrames - 1, 1)],
-          [1.06, 1.18],
+          [1.04, 1.12],
           clamp,
         );
         const shiftX = interpolate(
@@ -291,15 +401,15 @@ const CoverImageBackdrop: React.FC<{
         return (
           <div
             key={`${src}-${index}`}
-            className="coverTile"
+            className={
+              fullBleed ? "coverTile coverTile--full" : "coverTile coverTile--mag"
+            }
             style={{
               top: layout.top,
               left: layout.left,
               width: layout.width,
               height: layout.height,
               zIndex: layout.z,
-              opacity: 1,
-              transform: `rotate(${layout.rotate}deg)`,
             }}
           >
             <Img
@@ -329,83 +439,71 @@ const CoverScene: React.FC<{
   const { fps } = useVideoConfig();
   const showBottomChrome = frame >= fps;
   const isEn = video.locale === "en";
-  const brandSize = portrait ? 32 : 52;
   const issueLabel = isEn
     ? `Issue ${video.issueNumber}`
     : `第${video.issueNumber}期`;
+  const brand = isEn
+    ? video.headerTitle || "Indie Maker Weekly"
+    : video.headerTitle || "独立开发变现周刊";
+  const mark = isEn ? "soloez" : "ezindie";
+  const footerLabel = `${brand} · ${mark}`;
+
   const rawTheme = video.coverTitle.trim();
   const themeTitle =
     rawTheme &&
-    stripIssueParen(rawTheme) !== video.headerTitle &&
-    rawTheme !== `${video.headerTitle}（第${video.issueNumber}期）` &&
-    rawTheme !== `${video.headerTitle} (Issue ${video.issueNumber})`
-      ? stripIssueParen(rawTheme).replace(
-          new RegExp(`^${video.headerTitle}[：:\\s]*`),
-          "",
-        ).trim() || rawTheme
+    stripIssueParen(rawTheme) !== brand &&
+    rawTheme !== `${brand}（第${video.issueNumber}期）` &&
+    rawTheme !== `${brand} (Issue ${video.issueNumber})`
+      ? stripIssueParen(rawTheme)
+          .replace(new RegExp(`^${brand}[：:\\s]*`), "")
+          .trim() || rawTheme
       : "";
-  const heroTitle = themeTitle || issueLabel;
-  const heroSize = fitCoverTitleSize(heroTitle, portrait);
-  const brandLabel = isEn
-    ? video.headerTitle
-    : video.headerTitle.endsWith("精选")
-      ? video.headerTitle
-      : `${video.headerTitle}-精选`;
+  const headline = themeTitle || issueLabel;
+  const heroSize = fitCoverTitleSize(headline, portrait);
+  const coverImages =
+    video.coverImages && video.coverImages.length > 0
+      ? video.coverImages
+      : video.cases.map((item) => item.image).filter(Boolean).slice(0, 3);
 
   return (
     <AbsoluteFill className="coverSceneLayout">
-      <CoverImageBackdrop cases={video.cases} portrait={portrait} />
+      <CoverImageBackdrop images={coverImages} portrait={portrait} />
       <section className="coverScene">
         <div className="coverMain">
           <div className="coverBrandBlock">
-            <p className="coverBrandName" style={{ fontSize: brandSize }}>
-              {brandLabel}
+            <p
+              className="coverIssueLabel"
+              style={{ fontSize: portrait ? 22 : 36 }}
+            >
+              {issueLabel}
             </p>
             <div
               className="coverBrandLine"
-              style={{ width: portrait ? 160 : 220 }}
+              style={{ width: portrait ? 56 : 72 }}
             />
             <div className="coverThemeBlock">
-              {themeTitle ? (
-                <p
-                  className="coverIssueLabel"
-                  style={{ fontSize: portrait ? 34 : 56 }}
-                >
-                  {issueLabel}
-                </p>
-              ) : null}
               <h1
                 className="coverThemeTitle"
                 style={{ fontSize: heroSize }}
               >
-                {heroTitle}
+                {headline}
               </h1>
-              <span
-                className="coverThemeSub"
-                style={{ fontSize: portrait ? 26 : 44 }}
-              >
-                {video.coverSubtitle}
-              </span>
+              {video.coverSubtitle && video.coverSubtitle !== headline ? (
+                <span
+                  className="coverThemeSub"
+                  style={{ fontSize: portrait ? 22 : 32 }}
+                >
+                  {video.coverSubtitle}
+                </span>
+              ) : null}
             </div>
-          </div>
-          {showBottomChrome && video.coverBadge ? (
-            <div
-              className="coverBadge"
-              style={
-                portrait
-                  ? {
-                      fontSize: 28,
-                      padding: "16px 20px",
-                      left: PORTRAIT_CAPTION_INSET.leftPx,
-                      right: "auto",
-                      bottom: 16,
-                    }
-                  : undefined
-              }
+            <p
+              className="coverFooterBrand"
+              style={{ fontSize: portrait ? 18 : 28 }}
             >
-              {video.coverBadge}
-            </div>
-          ) : null}
+              {footerLabel}
+            </p>
+          </div>
         </div>
       </section>
       {showBottomChrome ? (

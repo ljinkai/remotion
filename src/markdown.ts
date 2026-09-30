@@ -278,6 +278,32 @@ const parseCoverTitle = (title: string, meta: Record<string, string>) => {
 const isClosingSection = (title: string) =>
   /总结|结尾|closing|takeaway|in one line/i.test(title);
 
+const parseCoverImages = (meta: Record<string, string>): string[] => {
+  const raw =
+    meta.cover_images ||
+    meta.coverimages ||
+    meta.cover_image ||
+    meta.coverimage ||
+    "";
+  if (!raw.trim()) {
+    return [];
+  }
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const part of raw.split(/[,|\s]+/)) {
+    const url = strip(part);
+    if (!url || seen.has(url)) {
+      continue;
+    }
+    seen.add(url);
+    out.push(url);
+    if (out.length >= 3) {
+      break;
+    }
+  }
+  return out;
+};
+
 const resolveParseLocale = (
   meta: Record<string, string>,
   optionsLocale?: string | null,
@@ -365,6 +391,14 @@ export const parseMarkdownToVideo = (
     ? `${cases.length || 5} indie picks`
     : `${cases.length || defaultVideoProps.cases.length} 个独立开发精选`;
 
+  const coverImagesFromMeta = parseCoverImages(meta);
+  const coverImagesFallback = cases
+    .map((item) => item.image.trim())
+    .filter(Boolean)
+    .slice(0, 3);
+  const coverImages =
+    coverImagesFromMeta.length > 0 ? coverImagesFromMeta : coverImagesFallback;
+
   return {
     issueNumber: parseIssueNumber(title, meta),
     headerTitle: meta.header || headerDefault,
@@ -380,6 +414,7 @@ export const parseMarkdownToVideo = (
     closingSubtitle: closingNarration,
     closingSourceBody: closingText || undefined,
     locale,
+    coverImages: coverImages.length > 0 ? coverImages : undefined,
     ticker: meta.ticker || defaultVideoProps.ticker,
     audioSrc: meta.audio || "",
     cases: cases.length > 0 ? cases : defaultVideoProps.cases,
