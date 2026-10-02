@@ -277,12 +277,16 @@ function App() {
         body.coverSource === "locale" ||
         body.coverSource === "video_job" ||
         body.coverSource === "issue_filtered"
-          ? "VidFlow 已选"
+          ? "VidFlow 已选拼贴"
           : body.coverSource === "markdown"
-            ? "正文配图"
+            ? "正文配图（VidFlow 无已选拼贴）"
             : body.coverSource === "unset"
               ? "未配置 VIDFLOW_API_BASE"
-              : "";
+              : body.coverSource === "vidflow_empty"
+                ? "VidFlow 无已选拼贴"
+                : String(body.coverSource || "").startsWith("http_")
+                  ? `VidFlow ${body.coverSource}`
+                  : "";
       setStatus(
         coverCount > 0
           ? `已填充第 ${issue} 期（${srcLabel}），封面拼贴 ${coverCount} 张${coverHint ? ` · ${coverHint}` : ""}`

@@ -539,7 +539,8 @@ export const listRecentWeeklyIssues = async (root, options = {}) => {
 
 /**
  * Prefer editor-selected collage URLs from VidFlow when available.
- * Requires VIDFLOW_API_BASE (e.g. http://127.0.0.1:8000).
+ * Requires VIDFLOW_API_BASE (e.g. https://vidflow.zeabur.app).
+ * Optional VIDFLOW_API_KEY / EXTENSION_API_KEY → X-API-Key (if endpoint is auth-gated).
  */
 export const fetchVidflowCoverBgUrls = async (issueNumber, locale = "zh") => {
   const base = String(process.env.VIDFLOW_API_BASE || "")
@@ -558,12 +559,17 @@ export const fetchVidflowCoverBgUrls = async (issueNumber, locale = "zh") => {
   if (!Number.isFinite(n) || n <= 0) {
     return { urls: [], source: "invalid" };
   }
+  const apiKey = String(
+    process.env.VIDFLOW_API_KEY || process.env.EXTENSION_API_KEY || "",
+  ).trim();
   try {
+    const headers = { "User-Agent": "remotion-workbench" };
+    if (apiKey) {
+      headers["X-API-Key"] = apiKey;
+    }
     const response = await fetch(
       `${base}/api/weekly/by-number/${n}/cover-bg?locale=${loc}`,
-      {
-        headers: { "User-Agent": "remotion-workbench" },
-      },
+      { headers },
     );
     if (!response.ok) {
       return { urls: [], source: `http_${response.status}` };
@@ -617,7 +623,14 @@ export const loadWeeklyIssueMarkdown = async (root, issueNumber, options = {}) =
   const fromVidflow = await fetchVidflowCoverBgUrls(issue, locale);
   let coverImages = fromVidflow.urls;
   let coverSource = fromVidflow.source;
-  if (coverImages.length === 0) {
+  // Only fall back to MD body images when VidFlow is unreachable — never when
+  // the editor simply has no saved 拼贴背景 (that would show the wrong cover).
+  const vidflowReachable =
+    coverSource !== "unset" &&
+    coverSource !== "error" &&
+    coverSource !== "invalid" &&
+    !String(coverSource).startsWith("http_");
+  if (coverImages.length === 0 && !vidflowReachable) {
     coverImages = extractCoverImagesFromMarkdown(prepared, locale);
     coverSource = coverImages.length > 0 ? "markdown" : "empty";
   }
