@@ -31,7 +31,7 @@
     "build": "remotion bundle",
     "upgrade": "remotion upgrade",
     "lint": "eslint src && tsc",
-    "test": "node --test tools/subtitle-cues.test.mjs tools/cover-images.test.mjs"
+    "test": "node --test tools/subtitle-cues.test.mjs tools/cover-images.test.mjs tools/weekly-cover-extract.test.mjs"
   },
   "sideEffects": [
     "*.css"

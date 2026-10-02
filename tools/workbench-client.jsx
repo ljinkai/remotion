@@ -263,8 +263,30 @@ function App() {
       updateMarkdown(body.markdown || "");
       alignVoiceToLocale(weeklyLocale);
       setEditorTab("markdown");
+      const coverCount = Array.isArray(body.coverImages)
+        ? body.coverImages.length
+        : 0;
+      const srcLabel =
+        body.source === "github"
+          ? "GitHub"
+          : body.source === "git"
+            ? "git remote"
+            : "本地";
+      const coverHint =
+        body.coverSource === "issue" ||
+        body.coverSource === "locale" ||
+        body.coverSource === "video_job" ||
+        body.coverSource === "issue_filtered"
+          ? "VidFlow 已选"
+          : body.coverSource === "markdown"
+            ? "正文配图"
+            : body.coverSource === "unset"
+              ? "未配置 VIDFLOW_API_BASE"
+              : "";
       setStatus(
-        `已填充第 ${issue} 期（${body.source === "github" ? "GitHub" : "本地"}）`,
+        coverCount > 0
+          ? `已填充第 ${issue} 期（${srcLabel}），封面拼贴 ${coverCount} 张${coverHint ? ` · ${coverHint}` : ""}`
+          : `已填充第 ${issue} 期（${srcLabel}）${coverHint ? ` · ${coverHint}` : ""}`,
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));

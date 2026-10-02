@@ -3,12 +3,17 @@
  *
  * Sources (merged by issue number, local preferred when reading):
  * - Local content dirs (ezindie / soloez)
- * - GitHub Contents API + raw (optional freshness when local lags)
+ * - Sibling git `origin/main` (when the working tree lags a private remote)
+ * - GitHub Contents API + raw (optional; private repos need GITHUB_TOKEN)
  */
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { readdir, readFile, access } from "node:fs/promises";
 import path from "node:path";
 
+const execFileAsync = promisify(execFile);
 const DEFAULT_LIMIT = 8;
+const GIT_REMOTE_REFS = ["origin/main", "origin/master"];
 
 const ZH_SOURCE = {
   id: "ezindie",
@@ -77,6 +82,93 @@ const resolveLocalDir = async (root, source) => {
   return null;
 };
 
+const gitToplevel = async (cwd) => {
+  try {
+    const { stdout } = await execFileAsync(
+      "git",
+      ["rev-parse", "--show-toplevel"],
+      { cwd },
+    );
+    const root = stdout.trim();
+    return root || null;
+  } catch {
+    return null;
+  }
+};
+
+const listGitRefIssues = async (localDir, source) => {
+  if (!localDir) {
+    return [];
+  }
+  const gitRoot = await gitToplevel(localDir);
+  if (!gitRoot) {
+    return [];
+  }
+  const relDir = path.relative(gitRoot, localDir).replaceAll("\\", "/");
+  for (const ref of GIT_REMOTE_REFS) {
+    try {
+      const { stdout } = await execFileAsync(
+        "git",
+        ["ls-tree", "-r", "--name-only", ref, "--", relDir || "."],
+        { cwd: gitRoot },
+      );
+      const items = [];
+      for (const line of stdout.split("\n")) {
+        const filename = path.basename(line.trim());
+        const match = filename.match(source.fileRe);
+        if (!match) {
+          continue;
+        }
+        const issue = Number(match[1]);
+        if (!Number.isFinite(issue)) {
+          continue;
+        }
+        items.push({
+          issue,
+          title: `${source.id} #${issue}`,
+          description: "",
+          source: "git",
+          filename,
+        });
+      }
+      if (items.length > 0) {
+        return items;
+      }
+    } catch {
+      // try next ref
+    }
+  }
+  return [];
+};
+
+const readGitRefMarkdown = async (localDir, source, issue) => {
+  if (!localDir) {
+    return null;
+  }
+  const gitRoot = await gitToplevel(localDir);
+  if (!gitRoot) {
+    return null;
+  }
+  const relFile = path
+    .join(path.relative(gitRoot, localDir), source.github.fileName(issue))
+    .replaceAll("\\", "/");
+  for (const ref of GIT_REMOTE_REFS) {
+    try {
+      const { stdout } = await execFileAsync(
+        "git",
+        ["show", `${ref}:${relFile}`],
+        { cwd: gitRoot, maxBuffer: 2 * 1024 * 1024 },
+      );
+      if (stdout) {
+        return stdout;
+      }
+    } catch {
+      // try next ref
+    }
+  }
+  return null;
+};
+
 const githubConfig = (source) => {
   const g = source.github;
   return {
@@ -113,6 +205,23 @@ const parseDescriptionFromMarkdown = (markdown) => {
   const text = String(markdown || "").replace(/\r\n/g, "\n");
   const desc = text.match(/^description:\s*["']?(.+?)["']?\s*$/m);
   return desc ? desc[1].trim() : "";
+};
+
+const enrichGitIssueMeta = async (localDir, source, items, limit) => {
+  const pending = [...items]
+    .sort((a, b) => b.issue - a.issue)
+    .slice(0, limit);
+  await Promise.all(
+    pending.map(async (item) => {
+      const markdown = await readGitRefMarkdown(localDir, source, item.issue);
+      if (!markdown) {
+        return;
+      }
+      item.title = parseTitleFromMarkdown(markdown) || item.title;
+      item.description =
+        parseDescriptionFromMarkdown(markdown) || item.description;
+    }),
+  );
 };
 
 const listLocalIssues = async (dir, source) => {
@@ -189,9 +298,9 @@ const listGithubIssues = async (source) => {
   }
 };
 
-const mergeIssues = (localItems, githubItems, limit) => {
+const mergeIssues = (localItems, remoteItems, limit) => {
   const byIssue = new Map();
-  for (const item of githubItems) {
+  for (const item of remoteItems) {
     byIssue.set(item.issue, item);
   }
   for (const item of localItems) {
@@ -247,6 +356,131 @@ const ensureLocaleFrontmatter = (markdown, locale, issue) => {
   return `---\n${fm}\n---\n${rest}`;
 };
 
+const MAX_COVER_IMAGES = 3;
+
+const isRenderedCoverUrl = (url) =>
+  /weekly-covers(?:-en)?\//i.test(url) || /\/covers?\//i.test(url);
+
+const isTranslationCardUrl = (url) => /translation-cards?\//i.test(url);
+
+/** Collect https image URLs from a section body (markdown + HTML img). */
+const collectSectionImageUrls = (body) => {
+  const text = String(body || "");
+  const urls = [];
+  const seen = new Set();
+  const push = (raw) => {
+    const url = String(raw || "").trim();
+    if (!url.startsWith("https://") || seen.has(url) || isRenderedCoverUrl(url)) {
+      return;
+    }
+    seen.add(url);
+    urls.push(url);
+  };
+  for (const match of text.matchAll(/!\[[^\]]*]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)) {
+    push(match[1]);
+  }
+  for (const match of text.matchAll(/<img\b[^>]*\bsrc=["']([^"']+)["']/gi)) {
+    push(match[1]);
+  }
+  return urls;
+};
+
+/**
+ * Pick 1–3 magazine backdrop URLs from published weekly MD (same spirit as
+ * VidFlow cover collage): one primary image per ## section.
+ * ZH prefers translation cards; EN skips them.
+ */
+export const extractCoverImagesFromMarkdown = (markdown, locale = "zh") => {
+  const isEn = String(locale || "zh").toLowerCase().startsWith("en");
+  const text = String(markdown || "").replace(/\r\n/g, "\n");
+  const bodyStart = text.startsWith("---\n")
+    ? (() => {
+        const end = text.indexOf("\n---\n", 4);
+        return end === -1 ? 0 : end + 5;
+      })()
+    : 0;
+  const body = text.slice(bodyStart);
+  const sections = body.split(/\n(?=##\s+)/);
+  const out = [];
+  const seen = new Set();
+
+  for (const section of sections) {
+    if (!/^##\s+/m.test(section)) {
+      continue;
+    }
+    // Skip closing / toc-like headings
+    const heading = (section.match(/^##\s+(.+)$/m) || [])[1] || "";
+    if (/目录|contents|takeaway|一句话总结|总结|closing/i.test(heading)) {
+      continue;
+    }
+    const urls = collectSectionImageUrls(section);
+    if (urls.length === 0) {
+      continue;
+    }
+    let pick = "";
+    if (isEn) {
+      pick =
+        urls.find((u) => !isTranslationCardUrl(u)) ||
+        urls[0];
+    } else {
+      pick =
+        urls.find((u) => isTranslationCardUrl(u)) ||
+        urls[0];
+    }
+    if (!pick || seen.has(pick)) {
+      continue;
+    }
+    seen.add(pick);
+    out.push(pick);
+    if (out.length >= MAX_COVER_IMAGES) {
+      break;
+    }
+  }
+  return out;
+};
+
+/** Insert or replace cover_images in YAML frontmatter. */
+export const injectCoverImagesFrontmatter = (markdown, coverUrls) => {
+  const urls = (coverUrls || [])
+    .map((u) => String(u || "").trim())
+    .filter((u) => u.startsWith("https://"))
+    .slice(0, MAX_COVER_IMAGES);
+  if (urls.length === 0) {
+    return String(markdown || "");
+  }
+  const line = `cover_images: ${urls.join(" ")}`;
+  const text = String(markdown || "").replace(/\r\n/g, "\n");
+  if (!text.startsWith("---\n")) {
+    return `---\n${line}\n---\n${text}`;
+  }
+  const end = text.indexOf("\n---\n", 4);
+  if (end === -1) {
+    return text;
+  }
+  let fm = text.slice(4, end);
+  const rest = text.slice(end + 5);
+  if (/^cover_images:\s*/m.test(fm)) {
+    fm = fm.replace(/^cover_images:\s*.*$/m, line);
+  } else {
+    fm = `${fm.replace(/\s+$/, "")}\n${line}`;
+  }
+  // Prefer description as theme when theme missing (scheme-1 hook)
+  if (!/^theme:\s*\S/m.test(fm)) {
+    const rawDesc = (fm.match(/^description:\s*(.+)$/m) || [])[1] || "";
+    let theme = rawDesc.trim();
+    if (
+      (theme.startsWith('"') && theme.endsWith('"')) ||
+      (theme.startsWith("'") && theme.endsWith("'"))
+    ) {
+      theme = theme.slice(1, -1).trim();
+    }
+    if (theme) {
+      fm = `${fm.replace(/\s+$/, "")}\ntheme: ${theme}`;
+    }
+  }
+  return `---\n${fm}\n---\n${rest}`;
+};
+
 const readLocalMarkdown = async (dir, source, issue) => {
   if (!dir) {
     return null;
@@ -288,17 +522,66 @@ export const listRecentWeeklyIssues = async (root, options = {}) => {
   );
   const source = sourceForLocale(locale);
   const localDir = await resolveLocalDir(root, source);
-  const [localItems, githubItems] = await Promise.all([
+  const [localItems, githubItems, gitItems] = await Promise.all([
     listLocalIssues(localDir, source),
     listGithubIssues(source),
+    listGitRefIssues(localDir, source),
   ]);
-  const issues = mergeIssues(localItems, githubItems, limit);
+  await enrichGitIssueMeta(localDir, source, gitItems, limit);
+  const issues = mergeIssues(localItems, [...githubItems, ...gitItems], limit);
   return {
     locale,
     catalog: source.id,
     localDir,
     issues,
   };
+};
+
+/**
+ * Prefer editor-selected collage URLs from VidFlow when available.
+ * Requires VIDFLOW_API_BASE (e.g. http://127.0.0.1:8000).
+ */
+export const fetchVidflowCoverBgUrls = async (issueNumber, locale = "zh") => {
+  const base = String(process.env.VIDFLOW_API_BASE || "")
+    .trim()
+    .replace(/\/$/, "");
+  if (!base) {
+    return { urls: [], source: "unset" };
+  }
+  const loc =
+    String(locale || "zh")
+      .trim()
+      .toLowerCase() === "en"
+      ? "en"
+      : "zh";
+  const n = Number(issueNumber);
+  if (!Number.isFinite(n) || n <= 0) {
+    return { urls: [], source: "invalid" };
+  }
+  try {
+    const response = await fetch(
+      `${base}/api/weekly/by-number/${n}/cover-bg?locale=${loc}`,
+      {
+        headers: { "User-Agent": "remotion-workbench" },
+      },
+    );
+    if (!response.ok) {
+      return { urls: [], source: `http_${response.status}` };
+    }
+    const body = await response.json();
+    const urls = Array.isArray(body.cover_bg_urls)
+      ? body.cover_bg_urls
+          .map((u) => String(u || "").trim())
+          .filter((u) => u.startsWith("https://"))
+          .slice(0, MAX_COVER_IMAGES)
+      : [];
+    return {
+      urls,
+      source: urls.length > 0 ? body.source || "vidflow" : "vidflow_empty",
+    };
+  } catch {
+    return { urls: [], source: "error" };
+  }
 };
 
 export const loadWeeklyIssueMarkdown = async (root, issueNumber, options = {}) => {
@@ -317,6 +600,10 @@ export const loadWeeklyIssueMarkdown = async (root, issueNumber, options = {}) =
   let markdown = await readLocalMarkdown(localDir, source, issue);
   let from = "local";
   if (!markdown) {
+    markdown = await readGitRefMarkdown(localDir, source, issue);
+    from = "git";
+  }
+  if (!markdown) {
     markdown = await readGithubMarkdown(source, issue);
     from = "github";
   }
@@ -325,7 +612,16 @@ export const loadWeeklyIssueMarkdown = async (root, issueNumber, options = {}) =
       `未找到 ${locale === "en" ? "soloez" : "ezindie"} 第 ${issue} 期 Markdown`,
     );
   }
-  const prepared = ensureLocaleFrontmatter(markdown, locale, issue);
+  let prepared = ensureLocaleFrontmatter(markdown, locale, issue);
+
+  const fromVidflow = await fetchVidflowCoverBgUrls(issue, locale);
+  let coverImages = fromVidflow.urls;
+  let coverSource = fromVidflow.source;
+  if (coverImages.length === 0) {
+    coverImages = extractCoverImagesFromMarkdown(prepared, locale);
+    coverSource = coverImages.length > 0 ? "markdown" : "empty";
+  }
+  prepared = injectCoverImagesFrontmatter(prepared, coverImages);
   return {
     locale,
     issue,
@@ -333,6 +629,8 @@ export const loadWeeklyIssueMarkdown = async (root, issueNumber, options = {}) =
     catalog: source.id,
     title: parseTitleFromMarkdown(prepared),
     description: parseDescriptionFromMarkdown(prepared),
+    coverImages,
+    coverSource,
     markdown: prepared,
   };
 };
