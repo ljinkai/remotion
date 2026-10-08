@@ -227,14 +227,22 @@ body {
   background: transparent;
 }
 
+/* Cover title centers against full frame; captions overlay and never shift it. */
+.coverSceneLayout .coverScene {
+  position: absolute;
+  inset: 0;
+  flex: none;
+  min-height: 0;
+}
+
 .coverMain {
   flex: 1;
   min-height: 0;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: flex-start;
   gap: 48px;
-  padding: 0 72px 56px;
+  padding: 0 72px;
 }
 
 .coverBrandBlock {
@@ -242,14 +250,15 @@ body {
   z-index: 11;
   flex: 0 1 auto;
   min-width: 0;
-  max-width: min(920px, 72%);
-  padding: 36px 44px 40px;
-  border-radius: calc(var(--radius) + 6px);
-  background: rgba(8, 10, 14, 0.66);
-  backdrop-filter: blur(16px);
+  max-width: min(1080px, 78%);
+  padding: 40px 48px 44px;
+  border-radius: calc(var(--radius) + 8px);
+  background: rgba(6, 8, 12, 0.78);
+  backdrop-filter: blur(18px);
   box-shadow:
-    0 24px 64px rgba(0, 0, 0, 0.4),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+    0 28px 72px rgba(0, 0, 0, 0.5),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.16),
+    0 0 0 1px rgba(56, 214, 198, 0.08);
 }
 
 .coverBrandName {
@@ -261,8 +270,8 @@ body {
 }
 
 .coverBrandLine {
-  height: 4px;
-  margin: 14px 0 18px;
+  height: 5px;
+  margin: 16px 0 20px;
   border-radius: 999px;
   background: linear-gradient(90deg, var(--accent), var(--accent-2));
 }
@@ -277,18 +286,23 @@ body {
 }
 
 .coverIssueLabel {
+  display: inline-block;
   margin: 0;
-  color: var(--accent);
-  font-weight: 800;
-  letter-spacing: 0.08em;
+  padding: 10px 18px;
+  border-radius: 999px;
+  color: #061018;
+  background: var(--accent);
+  font-weight: 900;
+  letter-spacing: 0.04em;
   line-height: 1;
   text-transform: none;
+  box-shadow: 0 8px 24px rgba(56, 214, 198, 0.35);
 }
 
 .coverThemeBlock {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
   opacity: 1;
 }
 
@@ -297,11 +311,13 @@ body {
   max-width: 100%;
   color: #ffffff;
   font-weight: 950;
-  line-height: 1.18;
-  letter-spacing: -0.02em;
+  line-height: 1.12;
+  letter-spacing: -0.03em;
   white-space: normal;
   overflow-wrap: anywhere;
-  text-shadow: 0 6px 28px rgba(0, 0, 0, 0.35);
+  text-shadow:
+    0 2px 0 rgba(0, 0, 0, 0.35),
+    0 10px 36px rgba(0, 0, 0, 0.55);
   opacity: 1;
 }
 
@@ -316,9 +332,9 @@ body {
 }
 
 .coverThemeSub {
-  color: rgba(255, 255, 255, 0.78);
-  font-size: 32px;
-  font-weight: 700;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 36px;
+  font-weight: 800;
   opacity: 1;
 }
 
@@ -568,8 +584,12 @@ body {
 }
 
 .coverSceneLayout .sceneSubtitleRegion {
-  position: relative;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
   z-index: 12;
+  flex: none;
   min-height: 128px;
   max-height: 200px;
   margin: 0 72px 48px;
@@ -638,22 +658,22 @@ body {
   position: relative;
   flex-direction: column;
   align-items: stretch;
-  justify-content: flex-start;
+  justify-content: center;
   gap: 0;
-  /* Top frosted bar — collage fills mid-frame above caption band */
-  padding: 108px 36px 40px;
+  padding: 0 36px;
 }
 
 .scene[data-aspect="portrait"] .coverBrandBlock {
   flex: 0 0 auto;
   width: 100%;
   max-width: 100%;
-  padding: 22px 24px 24px;
-  border-radius: 22px;
-  background: rgba(8, 10, 14, 0.72);
+  padding: 28px 28px 30px;
+  border-radius: 24px;
+  background: rgba(6, 8, 12, 0.82);
   box-shadow:
-    0 18px 48px rgba(0, 0, 0, 0.4),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+    0 22px 56px rgba(0, 0, 0, 0.48),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.12),
+    0 0 0 1px rgba(56, 214, 198, 0.1);
 }
 
 .scene[data-aspect="portrait"] .coverBrandName {
@@ -661,24 +681,28 @@ body {
 }
 
 .scene[data-aspect="portrait"] .coverBrandLine {
-  height: 3px;
-  margin: 10px 0 12px;
+  height: 4px;
+  margin: 14px 0 16px;
+}
+
+.scene[data-aspect="portrait"] .coverIssueLabel {
+  padding: 10px 16px;
 }
 
 .scene[data-aspect="portrait"] .coverThemeBlock {
-  gap: 10px;
+  gap: 12px;
 }
 
 .scene[data-aspect="portrait"] .coverThemeTitle {
   white-space: normal;
   overflow: visible;
   text-overflow: unset;
-  line-height: 1.18;
+  line-height: 1.1;
 }
 
 .scene[data-aspect="portrait"] .coverThemeSub {
-  font-size: 22px;
-  opacity: 0.85;
+  font-size: 26px;
+  opacity: 0.9;
 }
 
 .scene[data-aspect="portrait"] .coverFooterBrand {

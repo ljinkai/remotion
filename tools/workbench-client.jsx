@@ -36,6 +36,104 @@ const savedVoice =
 const savedWeeklyLocale =
   localStorage.getItem("remotion-weekly-locale") === "en" ? "en" : "zh";
 
+const SCRIPT_CACHE_KEY = "remotion-script-cache-v1";
+const SYNTH_CACHE_KEY = "remotion-synth-cache-v1";
+
+const contentFingerprint = (markdown, locale) => {
+  const text = `${String(locale || "zh")}\n${String(markdown || "")}`;
+  let hash = 2166136261;
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `${locale || "zh"}:${(hash >>> 0).toString(36)}:${text.length}`;
+};
+
+const readJsonStorage = (key) => {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) {
+      return null;
+    }
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+};
+
+const writeJsonStorage = (key, value) => {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Quota / private mode — ignore
+  }
+};
+
+const loadCachedScript = (markdown, locale) => {
+  const cached = readJsonStorage(SCRIPT_CACHE_KEY);
+  if (!cached || cached.fp !== contentFingerprint(markdown, locale)) {
+    return null;
+  }
+  if (!scriptIsComplete(cached.script)) {
+    return null;
+  }
+  return cached.script;
+};
+
+const loadCachedSynth = (markdown, locale, voice, script) => {
+  const cached = readJsonStorage(SYNTH_CACHE_KEY);
+  if (!cached || cached.fp !== contentFingerprint(markdown, locale)) {
+    return null;
+  }
+  if (cached.voice !== String(voice || "").trim()) {
+    return null;
+  }
+  if (!cached.props || cached.props.useSynthesizedTimeline !== true) {
+    return null;
+  }
+  // Script changed after synth → stale
+  if (script && cached.scriptFp) {
+    const scriptFp = contentFingerprint(JSON.stringify(script), locale);
+    if (cached.scriptFp !== scriptFp) {
+      return null;
+    }
+  }
+  return cached.props;
+};
+
+const persistScriptCache = (markdown, locale, script) => {
+  if (!scriptIsComplete(script)) {
+    localStorage.removeItem(SCRIPT_CACHE_KEY);
+    return;
+  }
+  writeJsonStorage(SCRIPT_CACHE_KEY, {
+    fp: contentFingerprint(markdown, locale),
+    script,
+    savedAt: Date.now(),
+  });
+};
+
+const persistSynthCache = (markdown, locale, voice, script, props) => {
+  if (!props || props.useSynthesizedTimeline !== true) {
+    localStorage.removeItem(SYNTH_CACHE_KEY);
+    return;
+  }
+  writeJsonStorage(SYNTH_CACHE_KEY, {
+    fp: contentFingerprint(markdown, locale),
+    scriptFp: script
+      ? contentFingerprint(JSON.stringify(script), locale)
+      : "",
+    voice: String(voice || "").trim(),
+    props,
+    savedAt: Date.now(),
+  });
+};
+
+const clearWorkbenchMediaCache = () => {
+  localStorage.removeItem(SCRIPT_CACHE_KEY);
+  localStorage.removeItem(SYNTH_CACHE_KEY);
+};
+
 function App() {
   const playerRef = useRef(null);
   const previewAudioRef = useRef(null);
@@ -51,8 +149,17 @@ function App() {
   const [scripting, setScripting] = useState(false);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
-  const [script, setScript] = useState(null);
-  const [synthesizedProps, setSynthesizedProps] = useState(null);
+  const [script, setScript] = useState(() =>
+    loadCachedScript(savedMarkdown, savedWeeklyLocale),
+  );
+  const [synthesizedProps, setSynthesizedProps] = useState(() =>
+    loadCachedSynth(
+      savedMarkdown,
+      savedWeeklyLocale,
+      savedVoice,
+      loadCachedScript(savedMarkdown, savedWeeklyLocale),
+    ),
+  );
   const [currentFrame, setCurrentFrame] = useState(0);
   const [editorTab, setEditorTab] = useState("markdown");
   const [xhsDraft, setXhsDraft] = useState(null);
@@ -93,6 +200,39 @@ function App() {
   useEffect(() => {
     setXhsDraft(null);
   }, [markdown, props.issueNumber, props.coverTitle, props.cases?.length]);
+
+  useEffect(() => {
+    persistScriptCache(markdown, weeklyLocale, script);
+  }, [markdown, weeklyLocale, script]);
+
+  useEffect(() => {
+    persistSynthCache(
+      markdown,
+      weeklyLocale,
+      voiceId,
+      script,
+      synthesizedProps,
+    );
+  }, [markdown, weeklyLocale, voiceId, script, synthesizedProps]);
+
+  useEffect(() => {
+    if (!script && !synthesizedProps) {
+      return;
+    }
+    const parts = [];
+    if (scriptIsComplete(script)) {
+      parts.push("逐字稿");
+    }
+    if (synthesizedProps?.useSynthesizedTimeline) {
+      parts.push("语音");
+    }
+    if (parts.length === 0) {
+      return;
+    }
+    setStatus(`已从本地缓存恢复${parts.join("与")}，可直接生成视频`);
+    // Only announce once on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const copyText = async (label, text) => {
     try {
@@ -215,6 +355,7 @@ function App() {
     localStorage.setItem("remotion-markdown", next);
     setScript(null);
     setSynthesizedProps(null);
+    clearWorkbenchMediaCache();
     setCurrentFrame(0);
     setError("");
     setStatus("");
@@ -229,6 +370,7 @@ function App() {
     localStorage.setItem("remotion-weekly-locale", locale);
     setScript(null);
     setSynthesizedProps(null);
+    clearWorkbenchMediaCache();
     setCurrentFrame(0);
     setError("");
     setStatus(locale === "en" ? "已切换英文生成逻辑" : "已切换中文生成逻辑");

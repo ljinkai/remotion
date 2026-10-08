@@ -79,26 +79,27 @@ const fade = (frame: number, start: number, end: number) =>
 const sceneProgress = (frame: number, durationFrames: number) =>
   interpolate(frame, [0, Math.max(durationFrames - 1, 1)], [0, 1], clamp);
 
-/** Cover H1 size by Chinese/Latin title length — keep single-line readable. */
+/** Cover H1 size by Chinese/Latin title length. */
 export const fitCoverTitleSize = (title: string, portrait = false) => {
   const len = [...title.trim()].length;
-  let size = 156;
+  let size = 172;
   if (len <= 6) {
-    size = 156;
+    size = 172;
   } else if (len <= 10) {
-    size = 128;
+    size = 148;
   } else if (len <= 12) {
-    size = 108;
+    size = 128;
   } else if (len <= 14) {
-    size = 96;
+    size = 112;
   } else if (len <= 16) {
-    size = 84;
+    size = 98;
   } else if (len <= 20) {
-    size = 72;
+    size = 88;
   } else {
-    size = 60;
+    size = 76;
   }
-  return portrait ? Math.round(size * 0.7) : size;
+  // Portrait can wrap 2 lines — keep size closer to landscape punch.
+  return portrait ? Math.round(size * 0.9) : size;
 };
 
 /** Case meta title — keeps strip height stable. */
@@ -473,13 +474,13 @@ const CoverScene: React.FC<{
           <div className="coverBrandBlock">
             <p
               className="coverIssueLabel"
-              style={{ fontSize: portrait ? 22 : 36 }}
+              style={{ fontSize: portrait ? 28 : 38 }}
             >
               {issueLabel}
             </p>
             <div
               className="coverBrandLine"
-              style={{ width: portrait ? 56 : 72 }}
+              style={{ width: portrait ? 88 : 120 }}
             />
             <div className="coverThemeBlock">
               <h1
@@ -491,7 +492,7 @@ const CoverScene: React.FC<{
               {video.coverSubtitle && video.coverSubtitle !== headline ? (
                 <span
                   className="coverThemeSub"
-                  style={{ fontSize: portrait ? 22 : 32 }}
+                  style={{ fontSize: portrait ? 28 : 38 }}
                 >
                   {video.coverSubtitle}
                 </span>
@@ -499,7 +500,7 @@ const CoverScene: React.FC<{
             </div>
             <p
               className="coverFooterBrand"
-              style={{ fontSize: portrait ? 18 : 28 }}
+              style={{ fontSize: portrait ? 20 : 28 }}
             >
               {footerLabel}
             </p>
@@ -579,14 +580,15 @@ const CaseScene: React.FC<{
   item: WeeklyCase;
   portrait?: boolean;
   locale?: "zh" | "en";
-}> = ({ item, portrait = false, locale = "zh" }) => {
+}> = ({ item, portrait = false }) => {
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
   const progress = sceneProgress(frame, durationInFrames);
   const imageScale = interpolate(progress, [0, 1], [1.04, 1.01]);
   const imageY = interpolate(progress, [0, 1], [0, -16]);
-  const meta = [item.author, item.date].filter(Boolean).join(" · ");
-  const metaFallback = locale === "en" ? "Featured" : "精选内容";
+  const meta = [item.author, item.date]
+    .filter((part) => part && part !== "Unknown")
+    .join(" · ");
   const hasImageSrc = Boolean(item.image.trim());
   const [imageShape, setImageShape] = useState<ImageShape>("unknown");
   const [imageBroken, setImageBroken] = useState(false);
@@ -634,7 +636,7 @@ const CaseScene: React.FC<{
             <h2 style={{ fontSize: fitCaseTitleSize(item.title, portrait) }}>
               {item.title}
             </h2>
-            <p>{meta || metaFallback}</p>
+            {meta ? <p>{meta}</p> : null}
           </div>
         </div>
         <strong className="caseMetric" style={{ color: item.color }}>

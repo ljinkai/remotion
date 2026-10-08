@@ -160,27 +160,103 @@ const AUTHOR_META_LINE =
   /^\*{1,2}\s*@([A-Za-z0-9._]+)\s*(?:[·•|]\s*([^*=\n]+?))?\s*\*{1,2}$/;
 const AUTHOR_PLAIN_LINE =
   /^@([A-Za-z0-9._]+)\s*(?:[·•|]\s*([^\n]+))?$/;
+/** GitHub-style meta: `*owner/repo*` or bare `owner/repo`. */
+const GITHUB_META_LINE =
+  /^\*{1,2}\s*([A-Za-z0-9._-]+\/[A-Za-z0-9._-]+)\s*\*{1,2}$/;
+const GITHUB_PLAIN_LINE = /^([A-Za-z0-9._-]+\/[A-Za-z0-9._-]+)$/;
 
 const isAuthorMetaLine = (line: string) => {
   const cleaned = line.trim();
-  return AUTHOR_META_LINE.test(cleaned) || AUTHOR_PLAIN_LINE.test(cleaned);
+  return (
+    AUTHOR_META_LINE.test(cleaned) ||
+    AUTHOR_PLAIN_LINE.test(cleaned) ||
+    GITHUB_META_LINE.test(cleaned) ||
+    GITHUB_PLAIN_LINE.test(cleaned)
+  );
 };
 
 const parseAuthorMetaLine = (lines: string[]) => {
   for (const line of lines) {
     const cleaned = line.trim();
-    const match =
+    const handleMatch =
       cleaned.match(AUTHOR_META_LINE) || cleaned.match(AUTHOR_PLAIN_LINE);
-    if (!match) {
-      continue;
+    if (handleMatch) {
+      const author = `@${handleMatch[1]}`;
+      const date = strip(handleMatch[2] || "")
+        .replace(/\*{1,2}$/g, "")
+        .trim();
+      return { author, date };
     }
-    const author = `@${match[1]}`;
-    const date = strip(match[2] || "")
-      .replace(/\*{1,2}$/g, "")
-      .trim();
-    return { author, date };
+    const repoMatch =
+      cleaned.match(GITHUB_META_LINE) || cleaned.match(GITHUB_PLAIN_LINE);
+    if (repoMatch) {
+      return { author: repoMatch[1], date: "" };
+    }
   }
   return { author: "", date: "" };
+};
+
+/** Infer platform label from section links / CTA text when author is missing. */
+const inferSourceLabel = (lines: string[]): string => {
+  const blob = lines.join("\n");
+  if (/reddit\.com/i.test(blob)) {
+    return "Reddit";
+  }
+  if (
+    /(?:^|[(\s/])(?:www\.)?(?:x|twitter)\.com\b/i.test(blob) ||
+    /查看原推文|原推文/i.test(blob)
+  ) {
+    return "X";
+  }
+  if (/github\.com/i.test(blob) || /\[GitHub/i.test(blob)) {
+    return "GitHub";
+  }
+  if (/producthunt\.com/i.test(blob)) {
+    return "Product Hunt";
+  }
+  if (/youtube\.com|youtu\.be/i.test(blob)) {
+    return "YouTube";
+  }
+  if (/linkedin\.com/i.test(blob)) {
+    return "LinkedIn";
+  }
+  if (/indiehackers\.com/i.test(blob)) {
+    return "Indie Hackers";
+  }
+  if (/hackernews|news\.ycombinator\.com/i.test(blob)) {
+    return "Hacker News";
+  }
+  return "";
+};
+
+const parseGithubRepoFromUrls = (lines: string[]): string => {
+  for (const line of lines) {
+    const match = line.match(
+      /github\.com\/([A-Za-z0-9._-]+\/[A-Za-z0-9._-]+)/i,
+    );
+    if (match?.[1] && !/^(topics|orgs|settings)\//i.test(match[1])) {
+      return match[1];
+    }
+  }
+  return "";
+};
+
+const resolveCaseAuthor = (
+  lines: string[],
+): { author: string; date: string } => {
+  const fromField = fieldValue(lines, ["作者", "author"]);
+  const fromDateField = fieldValue(lines, ["日期", "date"]);
+  const metaFromLine = parseAuthorMetaLine(lines);
+  const fromRepoUrl = parseGithubRepoFromUrls(lines);
+  const fromSource = inferSourceLabel(lines);
+  const author =
+    fromField ||
+    metaFromLine.author ||
+    fromRepoUrl ||
+    fromSource ||
+    "";
+  const date = fromDateField || metaFromLine.date || "";
+  return { author, date };
 };
 
 const firstImage = (lines: string[]) => {
@@ -344,17 +420,13 @@ export const parseMarkdownToVideo = (
       fieldValue(section.body, ["旁白", "narration"]) ||
       fieldValue(section.body, ["副标题", "subtitle"]) ||
       firstSentence(text, title);
-    const metaFromLine = parseAuthorMetaLine(section.body);
+    const { author, date } = resolveCaseAuthor(section.body);
 
     return {
       index: String(index + 1).padStart(2, "0"),
       title,
-      author:
-        fieldValue(section.body, ["作者", "author"]) ||
-        metaFromLine.author ||
-        "Unknown",
-      date:
-        fieldValue(section.body, ["日期", "date"]) || metaFromLine.date || "",
+      author,
+      date,
       metric:
         fieldValue(section.body, ["指标", "metric"]) || metricFallback,
       image: firstImage(section.body),

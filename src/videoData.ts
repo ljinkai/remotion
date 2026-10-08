@@ -281,7 +281,10 @@ export const normalizeVideoProps = (
     cases: cases.map((item, index) => ({
       index: clean(item.index, String(index + 1).padStart(2, "0")),
       title: clean(item.title, `条目 ${index + 1}`),
-      author: clean(item.author, "Unknown"),
+      author: (() => {
+        const value = clean(item.author, "");
+        return value === "Unknown" ? "" : value;
+      })(),
       date: clean(item.date, ""),
       metric: clean(item.metric, "精选"),
       image: clean(item.image, ""),
