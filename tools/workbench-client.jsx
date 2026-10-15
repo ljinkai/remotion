@@ -550,8 +550,8 @@ function App() {
     setError("");
     setStatus(
       hasScript
-        ? "正在按逐字稿合成语音..."
-        : "正在合成语音（未生成逐字稿，使用 MD 短句）...",
+        ? "正在按逐字稿合成整轨语音..."
+        : "正在合成整轨语音（未生成逐字稿，使用 MD 短句）...",
     );
     try {
       const response = await fetch("/api/synthesize", {

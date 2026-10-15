@@ -50,6 +50,8 @@ export type WeeklyVideoProps = {
   /** Output aspect — landscape 16:9 or portrait 9:16 */
   aspect?: string;
   audioSrc?: string;
+  /** One continuous narration WAV. Scene durations already include breaks. */
+  narrationAudioSrc?: string;
   useSynthesizedTimeline?: boolean;
   introDurationMs?: number;
   introAudioSrc?: string;
@@ -192,8 +194,39 @@ const normalizeCues = (cues: unknown): SubtitleCue[] | undefined => {
 export const hasSynthesizedTimeline = (props?: Partial<WeeklyVideoProps>) =>
   props?.useSynthesizedTimeline === true;
 
+export const hasContinuousNarration = (props?: Partial<WeeklyVideoProps>) =>
+  typeof props?.narrationAudioSrc === "string" &&
+  props.narrationAudioSrc.trim().length > 0;
+
 export const msToFrames = (ms: number) =>
   Math.max(1, Math.ceil((ms / 1000) * FPS));
+
+/** Cumulative frame bounds. Keep in sync with tools/continuous-narration.mjs. */
+const continuousTimelineFrames = (durationsMs: number[], fps = FPS) => {
+  const cumulative = [0];
+  for (const ms of durationsMs) {
+    cumulative.push(cumulative[cumulative.length - 1] + Math.max(0, Number(ms) || 0));
+  }
+  const bounds = cumulative.map((ms) =>
+    Math.max(0, Math.round((ms / 1000) * fps)),
+  );
+  for (let index = 1; index < bounds.length - 1; index += 1) {
+    if (bounds[index] <= bounds[index - 1]) {
+      bounds[index] = bounds[index - 1] + 1;
+    }
+  }
+  const last = bounds.length - 1;
+  if (last > 0 && bounds[last] <= bounds[last - 1]) {
+    bounds[last] = bounds[last - 1] + 1;
+  }
+  return bounds;
+};
+
+const continuousSceneDurations = (video: WeeklyVideoProps) => [
+  video.introDurationMs ?? SILENT_DURATION_MS,
+  ...video.cases.map((item) => item.durationMs ?? SILENT_DURATION_MS),
+  video.closingDurationMs ?? SILENT_DURATION_MS,
+];
 
 export const normalizeVideoProps = (
   props?: Partial<WeeklyVideoProps>,
@@ -253,6 +286,10 @@ export const normalizeVideoProps = (
     ticker: clean(source.ticker, defaultVideoProps.ticker),
     templateId: resolveTemplateId(source.templateId),
     aspect: resolveAspect(source.aspect),
+    narrationAudioSrc:
+      typeof source.narrationAudioSrc === "string"
+        ? source.narrationAudioSrc.trim() || undefined
+        : undefined,
     useSynthesizedTimeline: source.useSynthesizedTimeline === true,
     introDurationMs:
       typeof source.introDurationMs === "number"
@@ -272,8 +309,9 @@ export const normalizeVideoProps = (
         ? source.closingAudioSrc.trim() || undefined
         : undefined,
     closingCues: normalizeCues(source.closingCues),
-    audioSrc:
-      typeof source.audioSrc === "string"
+    audioSrc: hasContinuousNarration(source)
+      ? undefined
+      : typeof source.audioSrc === "string"
         ? source.audioSrc.trim() || undefined
         : hasSynthesizedTimeline(source)
           ? undefined
@@ -323,6 +361,11 @@ export const getDurationInFrames = (props?: Partial<WeeklyVideoProps>) => {
   const video = normalizeVideoProps(props);
   const synthesized = hasSynthesizedTimeline(video);
 
+  if (hasContinuousNarration(video)) {
+    const bounds = continuousTimelineFrames(continuousSceneDurations(video));
+    return Math.max(1, bounds[bounds.length - 1] ?? 1);
+  }
+
   if (synthesized) {
     let totalMs = sceneDurationMs(
       video.introDurationMs,
@@ -349,6 +392,9 @@ export const getDurationInFrames = (props?: Partial<WeeklyVideoProps>) => {
 
 export const buildTimeline = (props?: Partial<WeeklyVideoProps>) => {
   const video = normalizeVideoProps(props);
+  if (hasContinuousNarration(video)) {
+    return continuousTimelineFrames(continuousSceneDurations(video));
+  }
   const synthesized = hasSynthesizedTimeline(video);
   const timeline = [0];
 
@@ -433,6 +479,7 @@ export const buildCueTimeline = (
 ): CueTimelineEntry[] => {
   const video = normalizeVideoProps(props);
   const segments = buildSceneSegments(video);
+  const cuePadding = hasContinuousNarration(video) ? 0 : SCENE_PADDING_MS;
   const entries: CueTimelineEntry[] = [];
 
   for (const segment of segments) {
@@ -446,14 +493,14 @@ export const buildCueTimeline = (
       cues = video.introCues;
       fallbackText = video.introSubtitle;
       if (video.introDurationMs) {
-        sceneDurationMs = video.introDurationMs + SCENE_PADDING_MS;
+        sceneDurationMs = video.introDurationMs + cuePadding;
       }
     } else if (segment.type === "closing") {
       sceneLabel = "结尾";
       cues = video.closingCues;
       fallbackText = video.closingSubtitle;
       if (video.closingDurationMs) {
-        sceneDurationMs = video.closingDurationMs + SCENE_PADDING_MS;
+        sceneDurationMs = video.closingDurationMs + cuePadding;
       }
     } else if (segment.caseIndex !== undefined) {
       const item = video.cases[segment.caseIndex];
@@ -461,7 +508,7 @@ export const buildCueTimeline = (
       cues = item.cues;
       fallbackText = item.subtitle;
       if (item.durationMs) {
-        sceneDurationMs = item.durationMs + SCENE_PADDING_MS;
+        sceneDurationMs = item.durationMs + cuePadding;
       }
     }
 

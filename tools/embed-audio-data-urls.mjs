@@ -31,6 +31,9 @@ export const embedLocalAudioAsDataUrls = async (props, root) => {
   if (next.audioSrc) {
     next.audioSrc = await toDataUrl(root, next.audioSrc);
   }
+  if (next.narrationAudioSrc) {
+    next.narrationAudioSrc = await toDataUrl(root, next.narrationAudioSrc);
+  }
   if (Array.isArray(next.cases)) {
     for (const item of next.cases) {
       if (item.audioSrc) {

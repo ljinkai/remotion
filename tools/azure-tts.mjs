@@ -49,7 +49,7 @@ export const synthesizeScene = async (text, outputPath, options = {}) => {
   const boundaries = [];
   const synthesizer = new sdk.SpeechSynthesizer(speechConfig, null);
 
-  synthesizer.synthesisWordBoundary = (_sender, event) => {
+  const onWordBoundary = (_sender, event) => {
     boundaries.push({
       text: event.text,
       audioOffsetMs: ticksToMs(event.audioOffset),
@@ -59,6 +59,8 @@ export const synthesizeScene = async (text, outputPath, options = {}) => {
       boundaryType: event.boundaryType,
     });
   };
+  synthesizer.wordBoundary = onWordBoundary;
+  synthesizer.synthesisWordBoundary = onWordBoundary;
 
   try {
     const result = await new Promise((resolve, reject) => {
@@ -102,6 +104,94 @@ export const synthesizeScene = async (text, outputPath, options = {}) => {
       durationMs,
       cues,
       audioPath: outputPath,
+      voice,
+    };
+  } finally {
+    synthesizer.close();
+  }
+};
+
+export const synthesizeNarrationTrack = async (ssml, outputPath, options = {}) => {
+  const markup = String(ssml || "").trim();
+  if (!markup) {
+    throw new Error("整轨 SSML 为空");
+  }
+
+  const { key, region, voice } = getAzureSpeechConfig(options);
+  const speechConfig = sdk.SpeechConfig.fromSubscription(key, region);
+  speechConfig.speechSynthesisVoiceName = voice;
+  speechConfig.speechSynthesisOutputFormat =
+    sdk.SpeechSynthesisOutputFormat.Riff16Khz16BitMonoPcm;
+  speechConfig.setProperty(
+    sdk.PropertyId.SpeechServiceResponse_RequestWordBoundary,
+    "true",
+  );
+
+  const boundaries = [];
+  const bookmarks = [];
+  const synthesizer = new sdk.SpeechSynthesizer(speechConfig, null);
+
+  const onWordBoundary = (_sender, event) => {
+    boundaries.push({
+      text: event.text,
+      audioOffsetMs: ticksToMs(event.audioOffset),
+      durationMs: ticksToMs(event.duration),
+      textOffset: Number(event.textOffset),
+      wordLength: Number(event.wordLength),
+      boundaryType: event.boundaryType,
+    });
+  };
+  synthesizer.wordBoundary = onWordBoundary;
+  synthesizer.synthesisWordBoundary = onWordBoundary;
+  synthesizer.bookmarkReached = (_sender, event) => {
+    bookmarks.push({
+      name: String(event.text || "").trim(),
+      audioOffsetMs: ticksToMs(event.audioOffset),
+    });
+  };
+
+  try {
+    const result = await new Promise((resolve, reject) => {
+      synthesizer.speakSsmlAsync(
+        markup,
+        (speechResult) => {
+          if (
+            speechResult.reason === sdk.ResultReason.SynthesizingAudioCompleted
+          ) {
+            resolve(speechResult);
+            return;
+          }
+          const details = sdk.SpeechSynthesisCancellationDetails.fromResult(
+            speechResult,
+          );
+          reject(
+            new Error(
+              details.errorDetails ||
+                `Azure TTS failed: ${speechResult.reason}`,
+            ),
+          );
+        },
+        (error) => reject(error),
+      );
+    });
+
+    const audioBuffer = Buffer.from(result.audioData);
+    await writeFile(outputPath, audioBuffer);
+
+    const durationMs = Math.max(
+      ticksToMs(result.audioDuration),
+      boundaries.at(-1)
+        ? boundaries.at(-1).audioOffsetMs + boundaries.at(-1).durationMs
+        : 0,
+      bookmarks.at(-1)?.audioOffsetMs || 0,
+      500,
+    );
+
+    return {
+      durationMs,
+      audioPath: outputPath,
+      bookmarks,
+      boundaries,
       voice,
     };
   } finally {

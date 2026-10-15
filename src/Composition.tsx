@@ -714,6 +714,7 @@ export const MyComponent: React.FC<WeeklyVideoProps> = (props) => {
   };
   const segments = buildSceneSegments(themedVideo);
   const synthesized = hasSynthesizedTimeline(themedVideo);
+  const continuous = Boolean(themedVideo.narrationAudioSrc);
 
   return (
     <AbsoluteFill
@@ -721,7 +722,9 @@ export const MyComponent: React.FC<WeeklyVideoProps> = (props) => {
       data-template={template.id}
       data-aspect={portrait ? "portrait" : "landscape"}
     >
-      {!synthesized && themedVideo.audioSrc ? (
+      {themedVideo.narrationAudioSrc ? (
+        <Audio src={assetSrc(themedVideo.narrationAudioSrc)} volume={0.95} />
+      ) : !synthesized && themedVideo.audioSrc ? (
         <Audio src={assetSrc(themedVideo.audioSrc)} volume={0.95} />
       ) : null}
       <AbsoluteFill className="softBackdrop" />
@@ -735,7 +738,7 @@ export const MyComponent: React.FC<WeeklyVideoProps> = (props) => {
               from={segment.startFrame}
               durationInFrames={segment.durationFrames}
             >
-              {themedVideo.introAudioSrc ? (
+              {!continuous && themedVideo.introAudioSrc ? (
                 <Audio src={assetSrc(themedVideo.introAudioSrc)} volume={0.95} />
               ) : null}
               <CoverScene video={themedVideo} portrait={portrait} />
@@ -751,7 +754,7 @@ export const MyComponent: React.FC<WeeklyVideoProps> = (props) => {
               from={segment.startFrame}
               durationInFrames={segment.durationFrames}
             >
-              {item.audioSrc ? (
+              {!continuous && item.audioSrc ? (
                 <Audio src={assetSrc(item.audioSrc)} volume={0.95} />
               ) : null}
               <CaseScene
@@ -769,7 +772,7 @@ export const MyComponent: React.FC<WeeklyVideoProps> = (props) => {
             from={segment.startFrame}
             durationInFrames={segment.durationFrames}
           >
-            {themedVideo.closingAudioSrc ? (
+            {!continuous && themedVideo.closingAudioSrc ? (
               <Audio src={assetSrc(themedVideo.closingAudioSrc)} volume={0.95} />
             ) : null}
             <ClosingScene video={themedVideo} portrait={portrait} />
