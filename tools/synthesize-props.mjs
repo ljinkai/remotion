@@ -1,126 +1,124 @@
-import { mkdir, cp } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import path from "node:path";
-import { getAzureSpeechConfig, synthesizeScene } from "./azure-tts.mjs";
+import { getAzureSpeechConfig, synthesizeNarrationTrack } from "./azure-tts.mjs";
 import { DEFAULT_AZURE_VOICE, resolveVoiceId } from "./azure-voices.mjs";
-import { readTtsCache, writeTtsCache } from "./tts-cache.mjs";
-
-const SCENE_PADDING_MS = 300;
-const SILENT_DURATION_MS = 2000;
+import {
+  SCENE_BREAK_MS,
+  assignSceneTimings,
+  buildNarrationPlan,
+  buildNarrationSsml,
+  planHasSpeech,
+} from "./continuous-narration.mjs";
+import { readNarrationCache, writeNarrationCache } from "./tts-cache.mjs";
 
 const synthId = () =>
   new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
 
+const applyTrack = (enriched, publicPath, timings) => {
+  enriched.useSynthesizedTimeline = true;
+  enriched.narrationAudioSrc = publicPath;
+  enriched.audioSrc = undefined;
+  enriched.introAudioSrc = undefined;
+  enriched.closingAudioSrc = undefined;
+  if (Array.isArray(enriched.cases)) {
+    for (const item of enriched.cases) {
+      item.audioSrc = undefined;
+    }
+  }
+
+  for (const scene of timings) {
+    if (scene.id === "intro") {
+      enriched.introDurationMs = scene.durationMs;
+      enriched.introCues = scene.cues;
+      continue;
+    }
+    if (scene.id === "closing") {
+      enriched.closingDurationMs = scene.durationMs;
+      enriched.closingCues = scene.cues;
+      continue;
+    }
+    if (!scene.id.startsWith("case-") || !Array.isArray(enriched.cases)) {
+      continue;
+    }
+    const index = Number(scene.id.slice("case-".length));
+    const item = enriched.cases[index];
+    if (!item) {
+      continue;
+    }
+    item.durationMs = scene.durationMs;
+    item.cues = scene.cues;
+    item.audioSrc = undefined;
+  }
+};
+
 export const synthesizeVideoProps = async (props, { root, voice: voiceOpt } = {}) => {
   const id = synthId();
-  const workDir = path.join(root, ".workbench", `synth-${id}`);
-  // Use public/generated (no leading dot) so Remotion staticFile / public copy
-  // reliably picks up TTS assets during CLI render.
-  const publicDir = path.join(root, "public", "generated", `synth-${id}`);
-  await mkdir(workDir, { recursive: true });
-  await mkdir(publicDir, { recursive: true });
-
   const voice = resolveVoiceId(
     voiceOpt || process.env.AZURE_SPEECH_VOICE,
     DEFAULT_AZURE_VOICE,
   );
-
+  const plan = buildNarrationPlan(props);
   const enriched = structuredClone(props);
-  enriched.useSynthesizedTimeline = true;
-  enriched.audioSrc = undefined;
 
-  const scenes = [
-    {
-      key: "intro",
-      text: props.introSubtitle,
-      filename: "scene_00_intro.wav",
-      apply: (result, publicPath) => {
-        enriched.introDurationMs = result.durationMs || SILENT_DURATION_MS;
-        enriched.introCues = result.cues;
-        enriched.introAudioSrc = result.audioPath ? publicPath : undefined;
-      },
-    },
-    ...props.cases.map((item, index) => ({
-      key: `case-${index}`,
-      text: item.subtitle,
-      filename: `scene_${String(index + 1).padStart(2, "0")}_case.wav`,
-      caseIndex: index,
-      apply: (result, publicPath) => {
-        enriched.cases[index].durationMs =
-          result.durationMs || SILENT_DURATION_MS;
-        enriched.cases[index].cues = result.cues;
-        enriched.cases[index].audioSrc = result.audioPath
-          ? publicPath
-          : undefined;
-      },
-    })),
-    {
-      key: "closing",
-      text: props.closingSubtitle,
-      filename: `scene_${String(props.cases.length + 1).padStart(2, "0")}_closing.wav`,
-      apply: (result, publicPath) => {
-        enriched.closingDurationMs = result.durationMs || SILENT_DURATION_MS;
-        enriched.closingCues = result.cues;
-        enriched.closingAudioSrc = result.audioPath ? publicPath : undefined;
-      },
-    },
-  ];
-
-  let cacheHits = 0;
-  let cacheMisses = 0;
-  let ensuredAzure = false;
-
-  for (const scene of scenes) {
-    const narration = String(scene.text || "").trim();
-    if (!narration) {
-      scene.apply(
-        { durationMs: SILENT_DURATION_MS, cues: [], audioPath: null },
-        undefined,
-      );
-      continue;
-    }
-
-    const cached = await readTtsCache(root, narration, voice);
-    if (cached) {
-      cacheHits += 1;
-      scene.apply(
-        {
-          durationMs: cached.durationMs,
-          cues: cached.cues,
-          audioPath: cached.audioPath,
-        },
-        cached.relativePublicPath,
-      );
-      continue;
-    }
-
-    if (!ensuredAzure) {
-      // Validate credentials only when we actually need Azure.
-      getAzureSpeechConfig({ voice });
-      ensuredAzure = true;
-    }
-
-    cacheMisses += 1;
-    const workPath = path.join(workDir, scene.filename);
-    const result = await synthesizeScene(scene.text, workPath, { voice });
-    if (result.audioPath) {
-      const stored = await writeTtsCache(root, narration, voice, {
-        durationMs: result.durationMs,
-        cues: result.cues,
-        sourceAudioPath: workPath,
-      });
-      // Keep a per-run copy for debugging / job artifacts.
-      const publicPath = path.join(publicDir, scene.filename);
-      await cp(workPath, publicPath);
-      scene.apply(result, stored?.relativePublicPath);
-    } else {
-      scene.apply(result, undefined);
-    }
+  if (!planHasSpeech(plan)) {
+    enriched.useSynthesizedTimeline = false;
+    enriched.narrationAudioSrc = undefined;
+    return {
+      synthId: id,
+      props: enriched,
+      paddingMs: 0,
+      cache: { hits: 0, misses: 0, voice },
+    };
   }
+
+  const cached = await readNarrationCache(
+    root,
+    plan.scenes,
+    voice,
+    SCENE_BREAK_MS,
+  );
+  if (cached) {
+    applyTrack(enriched, cached.relativePublicPath, cached.timings);
+    return {
+      synthId: id,
+      props: enriched,
+      paddingMs: 0,
+      cache: { hits: 1, misses: 0, voice },
+    };
+  }
+
+  getAzureSpeechConfig({ voice });
+  const ssml = buildNarrationSsml(plan, { voice });
+  const workDir = path.join(root, ".workbench", `synth-${id}`);
+  await mkdir(workDir, { recursive: true });
+  const workPath = path.join(workDir, "narration.wav");
+  const result = await synthesizeNarrationTrack(ssml, workPath, { voice });
+  const timings = assignSceneTimings({
+    scenes: plan.scenes,
+    bookmarks: result.bookmarks,
+    boundaries: result.boundaries,
+    audioDurationMs: result.durationMs,
+  });
+  const stored = await writeNarrationCache(
+    root,
+    plan.scenes,
+    voice,
+    SCENE_BREAK_MS,
+    {
+      durationMs: result.durationMs,
+      timings,
+      sourceAudioPath: workPath,
+    },
+  );
+  if (!stored?.relativePublicPath) {
+    throw new Error("整轨语音写入缓存失败");
+  }
+  applyTrack(enriched, stored.relativePublicPath, timings);
 
   return {
     synthId: id,
     props: enriched,
-    paddingMs: SCENE_PADDING_MS,
-    cache: { hits: cacheHits, misses: cacheMisses, voice },
+    paddingMs: 0,
+    cache: { hits: 0, misses: 1, voice },
   };
 };

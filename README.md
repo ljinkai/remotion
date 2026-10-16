@@ -45,10 +45,10 @@ Workflow:
 1. Edit or import weekly Markdown (visual structure)
 2. Click **生成逐字稿** — Qwen rewrites spoken narration (or loads MD `旁白:` fields if all present)
 3. Edit the script panel if needed
-4. Click **合成语音** — Azure TTS + timed cues from the script
+4. Click **合成语音** — one Azure request for the whole narration; scene cuts and subtitles follow that audio's timestamps
 5. Preview cue timeline / player, then **生成 MP4**
 
-Synthesized audio is written to `public/generated/` (gitignored). Identical narration text + voice is cached under `.workbench/tts-cache/` and reused on later synthesize (no Azure call). Change the script or `AZURE_SPEECH_VOICE` to bust the cache. Without Azure credentials, preview still works on the legacy fixed timeline; MP4 render uses that timeline too. Without Qwen credentials, you can still hand-write `旁白:` in Markdown or skip AI and synthesize short MD-derived lines.
+Synthesized audio is one continuous WAV under `public/generated/` (gitignored). The same full script + voice is cached under `.workbench/tts-cache/` and reused on later synthesize (no Azure call). Editing any spoken line, or changing `AZURE_SPEECH_VOICE`, rebuilds the whole track. Without Azure credentials, preview still works on the legacy fixed timeline; MP4 render uses that timeline too. Without Qwen credentials, you can still hand-write `旁白:` in Markdown or skip AI and synthesize short MD-derived lines.
 
 Recommended runtime: Node 20+.
 
@@ -103,7 +103,7 @@ Create body:
 
 `options.aspect`: `"portrait"`（默认 9:16）或 `"landscape"`（16:9）。未传 `aspects` 时默认只渲竖屏。
 
-Pipeline: Markdown → Qwen script (unless skip / full `旁白`) → Azure TTS → Remotion MP4 → Qiniu → **POST webhook**.
+Pipeline: Markdown → Qwen script (unless skip / full `旁白`) → one Azure TTS track (scene cuts and subtitles follow its timestamps) → Remotion MP4 → Qiniu → **POST webhook**.
 
 Webhook headers: `X-Remotion-Signature: sha256=<hmac>` (HMAC-SHA256 of raw body with `RENDER_WEBHOOK_SECRET` or `RENDER_API_KEY`), `X-Remotion-Job-Id`.
 
