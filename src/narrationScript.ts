@@ -2,6 +2,12 @@ import type { WeeklyVideoProps } from "./videoData";
 import { normalizeVideoProps } from "./videoData";
 import { optimizeNarrationForSubtitles } from "./subtitleLines";
 
+/** Fixed cover / intro narration (zh). */
+export const FIXED_INTRO_NARRATION = [
+  "分享最新、有价值的独立开发、产品变现相关内容",
+  "关注我，不错过每周参考内容",
+].join("\n");
+
 /** Fixed CTA appended after the thematic closing summary (zh). */
 export const FIXED_CLOSING_NARRATION = "觉得有用就关注一下，我们下周见！";
 

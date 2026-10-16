@@ -479,14 +479,17 @@ function App() {
     if (!raw || typeof raw !== "object") {
       return raw;
     }
+    const text = (value) =>
+      optimizeNarrationForSubtitles(String(value ?? "")) ||
+      String(value ?? "").trim();
     return {
       ...raw,
-      intro: optimizeNarrationForSubtitles(raw.intro ?? ""),
-      closing: optimizeNarrationForSubtitles(raw.closing ?? ""),
+      intro: text(raw.intro),
+      closing: text(raw.closing),
       cases: Array.isArray(raw.cases)
         ? raw.cases.map((item) => ({
             ...item,
-            narration: optimizeNarrationForSubtitles(item.narration ?? ""),
+            narration: text(item.narration),
           }))
         : [],
     };

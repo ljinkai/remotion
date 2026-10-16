@@ -733,12 +733,17 @@ body {
 }
 
 .scene[data-aspect="portrait"] .coverSceneLayout .sceneSubtitleRegion {
-  min-height: 112px;
+  flex: none;
+  height: 168px;
+  min-height: 168px;
   max-height: 168px;
+  align-items: flex-end;
   padding: 8px 4px;
   background: transparent;
   border: none;
   box-shadow: none;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 .scene[data-aspect="portrait"] .coverSceneLayout .sceneSubtitleText {
@@ -790,13 +795,18 @@ body {
 }
 
 .scene[data-aspect="portrait"] .sceneSubtitleRegion {
-  min-height: 112px;
+  flex: 0 0 168px;
+  height: 168px;
+  min-height: 168px;
   max-height: 168px;
+  align-items: flex-end;
   padding: 8px 4px;
   background: transparent;
   border: none;
   border-radius: 0;
   box-shadow: none;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 .scene[data-aspect="portrait"] .sceneSubtitleText {

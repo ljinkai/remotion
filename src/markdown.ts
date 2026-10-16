@@ -7,6 +7,7 @@ import {
 import type { NarrationScript } from "./narrationScript";
 import {
   appendFixedClosingCta,
+  FIXED_INTRO_NARRATION,
   normalizeVideoLocale,
   type VideoLocale,
 } from "./narrationScript";
@@ -480,7 +481,7 @@ export const parseMarkdownToVideo = (
       meta.badge ||
       cases.find((item) => item.metric !== metricFallback)?.metric ||
       (isEn ? "Featured" : defaultVideoProps.coverBadge),
-    introSubtitle: introNarration,
+    introSubtitle: isEn ? introNarration : FIXED_INTRO_NARRATION,
     introSourceBody: introText || undefined,
     closingTitle: closing?.title || closingTitleDefault,
     closingSubtitle: closingNarration,
@@ -532,7 +533,10 @@ export const tryBuildScriptFromMarkdown = (
   }
 
   return {
-    intro: optimizeNarrationForSubtitles(introNarration),
+    intro:
+      normalizeVideoLocale(locale) === "zh"
+        ? FIXED_INTRO_NARRATION
+        : optimizeNarrationForSubtitles(introNarration),
     cases,
     closing: optimizeNarrationForSubtitles(
       appendFixedClosingCta(closingNarration, locale),

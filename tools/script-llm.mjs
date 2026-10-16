@@ -1,14 +1,22 @@
-import {
-  MAX_SUBTITLE_CHARS,
-  optimizeNarrationForSubtitles,
-} from "./subtitle-lines.mjs";
+import { optimizeNarrationForSubtitles } from "./subtitle-lines.mjs";
+
+const cleanNarration = (text) =>
+  String(text || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+/** Fixed cover / intro narration (zh). Two lines, used as-is. */
+const FIXED_INTRO_NARRATION = [
+  "分享最新、有价值的独立开发、产品变现相关内容",
+  "关注我，不错过每周参考内容",
+].join("\n");
 
 /** Fixed CTA appended after the thematic closing (zh). */
 const FIXED_CLOSING_NARRATION = "觉得有用就关注一下，我们下周见！";
 const FIXED_CLOSING_NARRATION_EN =
   "If this was useful, follow for more — see you next week.";
-
-const MAX_SUBTITLE_CHARS_EN = 42;
 
 const normalizeLocale = (locale) =>
   String(locale || "")
@@ -21,6 +29,54 @@ const fixedCta = (locale) =>
   normalizeLocale(locale) === "en"
     ? FIXED_CLOSING_NARRATION_EN
     : FIXED_CLOSING_NARRATION;
+
+const PLACEHOLDER_CLOSING =
+  "增长不是做更多动作，而是把一个动作做透";
+
+const stripClosingCta = (text) =>
+  String(text || "")
+    .replaceAll(FIXED_CLOSING_NARRATION, "")
+    .replaceAll(FIXED_CLOSING_NARRATION_EN, "")
+    .replace(/我们下周见[！!]?/g, "")
+    .replace(/see you next week\.?/gi, "")
+    .trim();
+
+/** Sample or generic closing, not this issue's own summary. */
+export const isPlaceholderClosing = (text) => {
+  const plain = stripClosingCta(text).replace(/\s+/g, "");
+  if (!plain) {
+    return true;
+  }
+  if (plain.includes(PLACEHOLDER_CLOSING)) {
+    return true;
+  }
+  if (plain.includes("Growthisdoingonethingdeeply")) {
+    return true;
+  }
+  if (/^本期\d+个独立开发精选/.test(plain)) {
+    return true;
+  }
+  return /^\d+indiepicksthisweek/i.test(plain);
+};
+
+/** Real 一句话总结 for the prompt. Empty when the issue has none. */
+export const scriptClosingInput = (props) => {
+  const text = String(
+    props?.closingSourceBody || props?.closingSubtitle || "",
+  ).trim();
+  if (isPlaceholderClosing(text)) {
+    return { missing: true, text: "" };
+  }
+  return { missing: false, text };
+};
+
+/** Cover / intro is the fixed copy. Model text is not appended. */
+export const prependFixedIntro = (intro, locale = "zh") => {
+  if (normalizeLocale(locale) === "en") {
+    return String(intro || "").trim();
+  }
+  return FIXED_INTRO_NARRATION;
+};
 
 const appendFixedClosingCta = (closing, locale = "zh") => {
   const base = String(closing || "").trim();
@@ -42,8 +98,6 @@ const appendFixedClosingCta = (closing, locale = "zh") => {
 const DEFAULT_BASE_URL =
   "https://dashscope-intl.aliyuncs.com/compatible-mode/v1";
 const DEFAULT_MODEL = "qwen-plus";
-
-export { optimizeNarrationForSubtitles } from "./subtitle-lines.mjs";
 
 export const getScriptLlmConfig = () => {
   const apiKey =
@@ -87,12 +141,22 @@ const normalizeScriptPayload = (payload, props, locale = "zh") => {
     throw new Error("逐字稿 JSON 结构无效");
   }
 
-  const intro = optimizeNarrationForSubtitles(payload.intro ?? "");
+  const introRaw = prependFixedIntro(payload.intro ?? "", locale);
+  const intro =
+    optimizeNarrationForSubtitles(cleanNarration(introRaw)) || introRaw;
   if (!intro) {
     throw new Error("逐字稿缺少 intro");
   }
-  const closingRaw = appendFixedClosingCta(payload.closing ?? "", locale);
-  const closing = optimizeNarrationForSubtitles(closingRaw) || closingRaw;
+  const closingBody = String(payload.closing ?? "").trim();
+  if (
+    scriptClosingInput(props).missing &&
+    isPlaceholderClosing(closingBody)
+  ) {
+    throw new Error("结尾需要从本期内容提炼一句话总结");
+  }
+  const closingRaw = appendFixedClosingCta(closingBody, locale);
+  const closing =
+    optimizeNarrationForSubtitles(cleanNarration(closingRaw)) || closingRaw;
   if (!closing) {
     throw new Error("逐字稿缺少 closing");
   }
@@ -107,7 +171,7 @@ const normalizeScriptPayload = (payload, props, locale = "zh") => {
   const cases = props.cases.map((item, index) => {
     const entry = rawCases[index] ?? {};
     const narration = optimizeNarrationForSubtitles(
-      entry.narration ?? entry.text ?? "",
+      cleanNarration(entry.narration ?? entry.text ?? ""),
     );
     if (!narration) {
       throw new Error(`逐字稿案例 ${item.index} 旁白为空`);
@@ -128,6 +192,7 @@ const normalizeScriptPayload = (payload, props, locale = "zh") => {
 };
 
 const buildUserPromptZh = (props) => {
+  const closingInput = scriptClosingInput(props);
   const cases = props.cases.map((item, index) => ({
     index: item.index,
     order: index + 1,
@@ -139,31 +204,30 @@ const buildUserPromptZh = (props) => {
     markdownBody: item.sourceBody || item.subtitle || "",
   }));
 
-  return `请把下面的「独立开发变现周刊」**原始 Markdown 内容**改写成适合「上图下字幕」视频的中文口播逐字稿。
+  return `请把下面的「独立开发变现周刊」改写成中文口播逐字稿。任务是从每个案例原文里提炼最有价值的内容，再用连贯的口语讲出来。
 
-核心原则：
-- 逐字稿必须**覆盖 markdownBody / introMarkdown / closingMarkdown 里的主要信息与观点**，不能只摘要成两三句。
-- 在保留原意的前提下口语化改写；不要编造 MD 中没有的事实、数据或产品名。
-- 短句分行上屏，但内容要写够。
-- closing 先写本期「一句话总结」的观点总结；系统会再自动追加固定结束语：${FIXED_CLOSING_NARRATION}
+怎么写：
+- 只根据这条案例自己的内容来提炼，讲清楚它值得听的地方。
+- 用完整句子，保留逗号和句号，读起来是一段话，不要拆成没有标点的短语清单，也不要一行一个词。
+- 不要套固定提纲，不要出现「它是什么」「怎么做」「结果如何」「关键数字」「为什么成立」这类栏目名。
+- 原文里的步骤、数字、结论，只有在它们就是这条案例的核心时才写进去，用自己的话说，不要为了凑结构另加标签。
+- 不要编造原文没有的事实、数据或产品名。不要 URL、emoji、列表符号。英文产品名保持完整。
+- 写完核心就停，不要凑字，也不要把核心讲丢。每个案例 narration 不超过 200 个字。不要写关注或下周见，系统会追加：${FIXED_CLOSING_NARRATION}
+- ${
+  closingInput.missing
+    ? "本期没有一句话总结。closing 必须从输入的案例原文里提炼一句特别值得关注的话，对得上某一条案例里的事实，不超过 60 个字。不要写「增长不是做更多动作，而是把一个动作做透」。"
+    : "closing 按输入里的一句话总结改成口播，不超过 60 个字，不要改成别的主题。"
+}
+- intro 固定为封面导语，不要改写，直接输出空字符串。系统会写成：${FIXED_INTRO_NARRATION.replaceAll("\n", " / ")}
 
-要求：
+输出：
 1. 只输出一个 JSON 对象，不要 Markdown，不要解释。
-2. JSON 形状：{"intro":"...","cases":[{"index":"01","narration":"..."},...],"closing":"..."}
-3. cases 数量必须为 ${props.cases.length}，index 与输入一致。
-4. 口语短句；保留产品名与关键数字；不要 URL、emoji、列表符号。
-5. 【字幕格式】每一行 ≤${MAX_SUBTITLE_CHARS} 个汉字；遇到逗号、句号、顿号、分号都拆成新行；行内不要出现，。！？、；：。
-6. 【英文完整性】Instagram、Reachlee、indie hacker 等英文品牌名/词组必须完整保留在同一行，禁止拆成 Ins/tagram 或 indie/hacker。
-7. narration / intro / closing 内部用换行分隔每一行字幕。
-8. 「第一条」「接下来」等短衔接可与下一短句同一行，中间用空格。
-9. 【篇幅】每个案例 narration 至少 8 行、建议 10～16 行；intro 至少 4 行；closing 写 2～4 行本期总结即可（不要写关注/下周见，系统会追加）。把 markdownBody 里的要点拆成多行口播，不要过度压缩。
-10. 正确示例（注意：只是格式示例，真实内容要以输入的 markdownBody 为准写满）：
-   第一条 小众产品重启记
-   作者是@farrux_hewson
-   用时仅三个月
-   重新激活老用户
-   实现稳定变现
-   （后面还应继续写 markdownBody 里的其他要点……）
+2. 形状：{"intro":"...","cases":[{"index":"01","narration":"..."},...],"closing":"..."}
+3. cases 数量必须为 ${props.cases.length}，index 与输入一致，顺序不变。
+4. intro、narration、closing 都是连贯段落，不要用换行把句子拆碎。
+
+示例（只示范语气，内容必须来自输入）：
+X推出了原创内容奖励计划。创作者发布原创推文、分析或视频，搬运和轻微修改不算。只有付费用户在首页看到的曝光才会计费，每两周结算，满30美元打款。有人首周入账92.18美元。
 
 输入：
 ${JSON.stringify(
@@ -174,8 +238,9 @@ ${JSON.stringify(
     introShort: props.introSubtitle,
     introMarkdown: props.introSourceBody || props.introSubtitle || "",
     cases,
-    closingShort: props.closingSubtitle,
-    closingMarkdown: props.closingSourceBody || props.closingSubtitle || "",
+    closingShort: closingInput.text,
+    closingMarkdown: closingInput.text,
+    closingMissing: closingInput.missing,
     fixedClosingCta: FIXED_CLOSING_NARRATION,
   },
   null,
@@ -184,6 +249,7 @@ ${JSON.stringify(
 };
 
 const buildUserPromptEn = (props) => {
+  const closingInput = scriptClosingInput(props);
   const cases = props.cases.map((item, index) => ({
     index: item.index,
     order: index + 1,
@@ -195,29 +261,25 @@ const buildUserPromptEn = (props) => {
     markdownBody: item.sourceBody || item.subtitle || "",
   }));
 
-  return `Rewrite the following Indie Maker Weekly Markdown into spoken English narration for an image-above / subtitle-below video.
+  return `Rewrite this Indie Maker Weekly into spoken English narration. For each case, extract what is actually valuable and say it as a coherent paragraph.
 
-Core rules:
-- Cover the main points in markdownBody / introMarkdown / closingMarkdown — do not compress to 2–3 sentences.
-- Keep facts, product names, and numbers; do not invent.
-- Short lines for on-screen subtitles; still write enough content.
-- closing: thematic takeaway only; the system appends this fixed CTA: ${FIXED_CLOSING_NARRATION_EN}
+How to write:
+- Follow the case itself. Do not use a fixed outline such as what / how / result / numbers / why.
+- Use complete sentences with normal punctuation. Do not turn the script into a stack of short fragments.
+- Keep a step, number, or conclusion only when it is part of that case's core point. Do not add labels.
+- Do not invent facts, names, or figures. No URLs, emoji, or bullets. Keep product names intact.
+- Stop when the core point is said. Each case narration ≤ 120 words. Intro ≤ 50 words. Do not write follow/subscribe; the system appends: ${FIXED_CLOSING_NARRATION_EN}
+- ${
+  closingInput.missing
+    ? "This issue has no takeaway. closing must be one sentence drawn from the cases, something especially worth remembering, ≤ 40 words. Do not use a generic growth slogan."
+    : "closing rewrites the provided takeaway into speech, ≤ 40 words. Do not change the point."
+}
 
-Requirements:
-1. Output one JSON object only — no Markdown fences, no commentary.
+Output:
+1. One JSON object only. No Markdown, no commentary.
 2. Shape: {"intro":"...","cases":[{"index":"01","narration":"..."},...],"closing":"..."}
-3. cases length must be ${props.cases.length}; keep the same index values.
-4. Conversational English; no URLs, emoji, or bullet symbols.
-5. Subtitles: each line ≤${MAX_SUBTITLE_CHARS_EN} characters; split on commas/periods; no punctuation inside a line.
-6. Use newlines inside intro / narration / closing for each subtitle line.
-7. Short bridges like "First up" may share a line with the next clause (space-separated).
-8. Length: each case narration ≥8 lines (aim 10–16); intro ≥4 lines; closing 2–4 lines of takeaway only (do not write follow/subscribe — system appends CTA).
-9. Format example only (real content must follow markdownBody):
-   First up Cool App
-   by @handle
-   Hit 1k stars in three months
-   Reactivated dormant users
-   Steady monetization
+3. cases length must be ${props.cases.length}; keep index and order.
+4. intro, narration, and closing are paragraphs, not line-broken phrase lists.
 
 Input:
 ${JSON.stringify(
@@ -228,8 +290,9 @@ ${JSON.stringify(
     introShort: props.introSubtitle,
     introMarkdown: props.introSourceBody || props.introSubtitle || "",
     cases,
-    closingShort: props.closingSubtitle,
-    closingMarkdown: props.closingSourceBody || props.closingSubtitle || "",
+    closingShort: closingInput.text,
+    closingMarkdown: closingInput.text,
+    closingMissing: closingInput.missing,
     fixedClosingCta: FIXED_CLOSING_NARRATION_EN,
   },
   null,
@@ -249,8 +312,8 @@ const callChatCompletions = async (
 ) => {
   const isEn = normalizeLocale(locale) === "en";
   const system = isEn
-    ? `You write English spoken narration and subtitles. Output strict JSON. Expand from markdownBody / introMarkdown / closingMarkdown — never ultra-short summaries. Split each field into short subtitle lines (≤${MAX_SUBTITLE_CHARS_EN} chars); no commas or periods inside a line; ≥8 lines per case. Keep English brand names and phrases (e.g. Instagram, indie hacker) intact on one line — never split mid-word.`
-    : `你是中文口播与字幕编辑。输出严格 JSON。必须依据输入里的 markdownBody / introMarkdown / closingMarkdown 充分改写，覆盖原文要点，禁止只写极短摘要。每个字段用换行分成多行短字幕；行内不要写逗号或句号；每行不超过 ${MAX_SUBTITLE_CHARS} 个汉字；每个案例至少 8 行。英文品牌名与词组（如 Instagram、indie hacker）必须完整留在同一行，禁止中途拆词。`;
+    ? `You write spoken English narration. Output strict JSON. For each case, extract the valuable point from the source and say it in complete sentences. Do not use an outline like what/how/result/numbers/why. Do not invent. Each case ≤ 120 words, intro ≤ 50, closing ≤ 40.`
+    : `你是中文口播编辑。输出严格 JSON。从每个案例原文里提炼最有价值的内容，用完整句子连贯讲出来。不要套「是什么、怎么做、结果、数字、为什么成立」这类提纲，也不要拆成没有标点的短句。不要编造。每个案例不超过 200 字。intro 留空，封面导语由系统写成固定文案。如果本期没有一句话总结，closing 从案例里提炼一句特别值得关注的话，不超过 60 字，不要用「增长不是做更多动作，而是把一个动作做透」。`;
 
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",

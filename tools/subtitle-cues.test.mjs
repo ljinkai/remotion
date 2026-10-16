@@ -49,6 +49,30 @@ test("buildTimedSubtitleCues cuts at the next line first word", () => {
   assert.equal(cues[0].endMs, cues[1].startMs);
 });
 
+test("splitSubtitleLines breaks on comma, period, and semicolon", () => {
+  assert.deepEqual(splitSubtitleLines("搬运和轻微修改，都不算原创。"), [
+    "搬运和轻微修改",
+    "都不算原创",
+  ]);
+  assert.deepEqual(
+    splitSubtitleLines(
+      "只有付费用户在首页看到的曝光才会计费，每两周结算；满30美元打款。",
+    ),
+    [
+      "只有付费用户在首页看到的曝光才会计费",
+      "每两周结算",
+      "满30美元打款",
+    ],
+  );
+  assert.deepEqual(splitSubtitleLines("首周入账92.18美元。"), [
+    "首周入账92.18美元",
+  ]);
+  assert.deepEqual(
+    splitSubtitleLines("只对原创推文、技术分析、图片或视频付费。"),
+    ["只对原创推文、技术分析、图片或视频付费"],
+  );
+});
+
 test("ensureSingleLineCues splits leftover sentences by character weight", () => {
   const pieces = ensureSingleLineCues(
     [{ text: RAW, startMs: 0, endMs: 2000 }],

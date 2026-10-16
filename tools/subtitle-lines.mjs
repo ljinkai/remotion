@@ -5,25 +5,15 @@
 export const MAX_SUBTITLE_CHARS = 16;
 export const HARD_SUBTITLE_CHARS = 22;
 
-const SPLIT_PUNCT = /[，。！？、；：,.!?;:]+/u;
-const STRIP_PUNCT = /[，。！？、；：,.!?;:]+/gu;
+const STRIP_PUNCT = /[，。！？；：,.!?;:]+/gu;
 
 export const charLen = (text) => [...String(text || "")].length;
 
-const normalizeNarration = (raw) =>
-  String(raw || "")
-    .replace(/\r\n/g, "\n")
-    .replace(/[ \t]+/g, " ")
-    .replace(/\n+/g, "，")
-    .replace(/\s*([，。！？、；：,.!?;:])\s*/g, "$1")
-    .replace(/[.…]+/g, "。")
-    .replace(/[!！]+/g, "！")
-    .replace(/[?？]+/g, "？")
-    .trim();
-
 export const stripSubtitlePunctuation = (text) =>
   String(text || "")
+    .replace(/(\d)\.(\d)/g, "$1\u0000$2")
     .replace(STRIP_PUNCT, " ")
+    .replace(/\u0000/g, ".")
     .replace(/\s+/g, " ")
     .trim();
 
@@ -265,20 +255,28 @@ export const mergeSubtitleSegments = (segments) => {
   });
 };
 
+/** Split a paragraph on comma, period, or semicolon. Existing lines stay intact. */
 export const splitSubtitleLines = (raw) => {
-  const text = normalizeNarration(raw);
+  const text = String(raw || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/[ \t]+/g, " ")
+    .replace(/(\d)\.(\d)/g, "$1\u0000$2")
+    .trim();
   if (!text) {
     return [];
   }
 
-  const pieces = text
-    .split(SPLIT_PUNCT)
-    .map((item) => stripSubtitlePunctuation(item))
-    .filter(Boolean);
+  if (text.includes("\n")) {
+    return text
+      .split(/\n+/)
+      .map((item) => item.replace(/\u0000/g, ".").trim())
+      .filter(Boolean);
+  }
 
-  return mergeSubtitleSegments(
-    pieces.length ? pieces : [stripSubtitlePunctuation(text)],
-  );
+  return text
+    .split(/[，,。．.；;！？!?\n]+/u)
+    .map((item) => stripSubtitlePunctuation(item.replace(/\u0000/g, ".")))
+    .filter(Boolean);
 };
 
 export const buildProvisionalCues = (raw, durationMs) => {
