@@ -143,7 +143,7 @@ export const HostExplainerDemo: React.FC = () => {
         activeIndex={beat.checklistIndex}
         progress={beat.progressValue}
       />
-      <Host pose={beat.pose} localFrame={local} globalFrame={frame} />
+      <Host pose={beat.pose} localFrame={local} speakFrom={12} speakTo={138} />
       <div
         style={{
           position: "absolute",

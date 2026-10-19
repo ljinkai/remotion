@@ -104,7 +104,6 @@ export const HostExplainer: React.FC<HostExplainerProps> = ({
     Math.round(((beat.endMs - beat.startMs) / 1000) * fps),
   );
   const localFrame = Math.max(0, frame - startFrame);
-  const mouthOpen = localFrame >= 12 && localFrame < durationFrames - 12;
   const subtitleOpacity = interpolate(
     localFrame,
     [Math.max(0, durationFrames - 12), Math.max(1, durationFrames - 1)],
@@ -184,9 +183,10 @@ export const HostExplainer: React.FC<HostExplainerProps> = ({
       />
       <Host
         pose={beat.host}
+        section={beat.section}
         localFrame={localFrame}
-        globalFrame={frame}
-        mouthOpen={mouthOpen}
+        speakFrom={12}
+        speakTo={Math.max(13, durationFrames - 12)}
       />
       <div
         style={{
