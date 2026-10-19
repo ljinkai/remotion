@@ -5,7 +5,8 @@ export type VideoTemplateId =
   | "noir"
   | "ocean"
   | "ember"
-  | "studio";
+  | "studio"
+  | "host";
 
 export type VideoTemplate = {
   id: VideoTemplateId;
@@ -44,6 +45,12 @@ export const VIDEO_TEMPLATES: VideoTemplate[] = [
     label: "Studio",
     blurb: "扁平深灰 · 干净面板",
     caseColors: ["#64d2ff", "#a78bfa", "#34d399", "#fbbf24", "#fb7185"],
+  },
+  {
+    id: "host",
+    label: "主持人",
+    blurb: "逐字稿分镜 · 竖屏讲解",
+    caseColors: ["#ff4d1c", "#161616", "#f4f1ea", "#c4b5a4", "#8a8178"],
   },
 ];
 

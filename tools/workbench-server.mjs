@@ -16,9 +16,11 @@ import {
   listChineseVoices,
   resolveVoiceId,
 } from "./azure-voices.mjs";
-import { createQueuedJob, publicJobView, readJob } from "./render-job-store.mjs";
+import { compositionIdForProps } from "./beat-spec.mjs";
+import { planBeats } from "./beat-planner.mjs";
 import { enqueueRenderJob } from "./render-job-worker.mjs";
 import { normalizeRenderJobOptions } from "./render-job-options.mjs";
+import { createQueuedJob, publicJobView, readJob } from "./render-job-store.mjs";
 import {
   listRecentWeeklyIssues,
   loadWeeklyIssueMarkdown,
@@ -279,6 +281,9 @@ const renderWorkbenchHtml = () => `<!doctype html>
       }
       .swatchBtn[data-template="studio"] {
         background: linear-gradient(135deg, #0e1116, #64d2ff 50%, #a78bfa);
+      }
+      .swatchBtn[data-template="host"] {
+        background: linear-gradient(135deg, #f4f1ea, #ff4d1c 55%, #161616);
       }
       .toolbarActions { display: flex; flex-wrap: wrap; gap: 8px; }
       .toolbarActions button { padding: 7px 12px; font-size: 13px; }
@@ -605,11 +610,19 @@ const renderVideo = async (props) => {
     .replace(/[-:.TZ]/g, "")
     .slice(0, 14);
   const propsPath = path.join(tmpDir, `props-${id}.json`);
-  const aspect = props?.aspect === "portrait" ? "portrait" : "landscape";
-  const compositionId =
-    aspect === "portrait"
-      ? "IndieWeeklyMarkdownPortrait"
-      : "IndieWeeklyMarkdown";
+  const aspect =
+    props?.templateId === "host"
+      ? "portrait"
+      : props?.aspect === "portrait"
+        ? "portrait"
+        : "landscape";
+  const compositionId = compositionIdForProps({ ...props, aspect });
+  if (
+    compositionId === "HostExplainer" &&
+    (!Array.isArray(props?.beats) || props.beats.length === 0)
+  ) {
+    throw new Error("主持人模板需要先生成分镜");
+  }
   const outputName = `markdown-video-${aspect}-${id}.mp4`;
   const outputPath = path.join(outDir, outputName);
   const renderProps = await embedLocalAudioAsDataUrls(props, root);
@@ -841,6 +854,21 @@ const server = createServer(async (req, res) => {
         locale,
       });
       sendJson(res, 200, { script, locale });
+      return;
+    }
+
+    if (req.method === "POST" && pathname === "/api/beats") {
+      const body = await readJson(req);
+      if (!body.script || typeof body.script !== "object") {
+        sendJson(res, 400, { error: "缺少逐字稿" });
+        return;
+      }
+      if (!body.props || typeof body.props !== "object") {
+        sendJson(res, 400, { error: "缺少 props" });
+        return;
+      }
+      const beats = await planBeats(body.script, body.props);
+      sendJson(res, 200, { beats });
       return;
     }
 

@@ -1,0 +1,15 @@
+export const theme = {
+  paper: "#f4f1ea",
+  dot: "rgba(28,28,28,0.16)",
+  ink: "#161616",
+  muted: "#8a8178",
+  accent: "#ff4d1c",
+  card: "#fffcf8",
+  line: "#e4ddd4",
+  skin: "#f3d2b5",
+  beard: "#3a2a24",
+  jacket: "#c4b5a4",
+  font: '"Inter", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif',
+  headlineSize: 68,
+  chapterSize: 22,
+};

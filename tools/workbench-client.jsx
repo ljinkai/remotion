@@ -2,6 +2,8 @@ import { Player } from "@remotion/player";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { MyComponent } from "../src/Composition";
+import { HostExplainer } from "../src/host-explainer/HostFromBeats";
+import { hostDurationInFrames } from "../src/host-explainer/hostTypes";
 import {
   parseMarkdownToVideo,
   sampleMarkdown,
@@ -147,6 +149,8 @@ function App() {
   const [rendering, setRendering] = useState(false);
   const [synthesizing, setSynthesizing] = useState(false);
   const [scripting, setScripting] = useState(false);
+  const [planning, setPlanning] = useState(false);
+  const [beats, setBeats] = useState(null);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [script, setScript] = useState(() =>
@@ -187,7 +191,20 @@ function App() {
     }),
     [synthesizedProps, scriptedProps, templateId, aspect],
   );
-  const durationInFrames = useMemo(() => getDurationInFrames(props), [props]);
+  const previewProps = useMemo(
+    () =>
+      templateId === "host"
+        ? { ...props, beats: beats ?? [], aspect: "portrait" }
+        : props,
+    [props, templateId, beats],
+  );
+  const durationInFrames = useMemo(
+    () =>
+      templateId === "host"
+        ? hostDurationInFrames(beats ?? [])
+        : getDurationInFrames(props),
+    [templateId, beats, props],
+  );
   const hasVoice = props.useSynthesizedTimeline === true;
   const hasScript = scriptIsComplete(script);
   const activeTemplate =
@@ -248,9 +265,18 @@ function App() {
     const next = resolveTemplateId(id);
     setTemplateId(next);
     localStorage.setItem("remotion-template", next);
+    if (next === "host") {
+      setAspect("portrait");
+      localStorage.setItem("remotion-aspect", "portrait");
+    }
+    setCurrentFrame(0);
+    playerRef.current?.seekTo(0);
   };
 
   const selectAspect = (id) => {
+    if (templateId === "host") {
+      return;
+    }
     const next = resolveAspect(id);
     setAspect(next);
     localStorage.setItem("remotion-aspect", next);
@@ -354,6 +380,7 @@ function App() {
     setMarkdown(next);
     localStorage.setItem("remotion-markdown", next);
     setScript(null);
+    setBeats(null);
     setSynthesizedProps(null);
     clearWorkbenchMediaCache();
     setCurrentFrame(0);
@@ -369,6 +396,7 @@ function App() {
     setWeeklyLocale(locale);
     localStorage.setItem("remotion-weekly-locale", locale);
     setScript(null);
+    setBeats(null);
     setSynthesizedProps(null);
     clearWorkbenchMediaCache();
     setCurrentFrame(0);
@@ -457,6 +485,7 @@ function App() {
       return { ...prev, ...patch, source: "manual" };
     });
     setSynthesizedProps(null);
+    setBeats(null);
   };
 
   const updateCaseNarration = (index, narration) => {
@@ -473,6 +502,7 @@ function App() {
       };
     });
     setSynthesizedProps(null);
+    setBeats(null);
   };
 
   const formatScript = (raw) => {
@@ -510,6 +540,7 @@ function App() {
       if (fromMarkdown) {
         setScript(formatScript(fromMarkdown));
         setSynthesizedProps(null);
+        setBeats(null);
         setEditorTab("script");
         setStatus(
           weeklyLocale === "en"
@@ -534,6 +565,7 @@ function App() {
       }
       setScript(formatScript(body.script));
       setSynthesizedProps(null);
+      setBeats(null);
       setEditorTab("script");
       setStatus(
         weeklyLocale === "en"
@@ -545,6 +577,35 @@ function App() {
       setStatus("");
     } finally {
       setScripting(false);
+    }
+  };
+
+  const generateBeats = async () => {
+    setPlanning(true);
+    setError("");
+    setStatus("正在根据逐字稿生成分镜...");
+    try {
+      const response = await fetch("/api/beats", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          props: synthesizedProps ?? scriptedProps,
+          script,
+        }),
+      });
+      const body = await response.json();
+      if (!response.ok) {
+        throw new Error(body.error || "生成分镜失败");
+      }
+      setBeats(body.beats);
+      setCurrentFrame(0);
+      playerRef.current?.seekTo(0);
+      setStatus(`已生成 ${body.beats.length} 条分镜，可预览或导出竖屏`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setStatus("");
+    } finally {
+      setPlanning(false);
     }
   };
 
@@ -634,7 +695,7 @@ function App() {
       const response = await fetch("/api/render", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ props }),
+        body: JSON.stringify({ props: previewProps }),
       });
       const body = await response.json();
       if (!response.ok) {
@@ -656,6 +717,7 @@ function App() {
   };
 
   const busy =
+    planning ||
     rendering ||
     synthesizing ||
     scripting ||
@@ -940,18 +1002,29 @@ function App() {
           <div className="toolbarGroup">
             <span>模板</span>
             <div className="swatchRow">
-              {VIDEO_TEMPLATES.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  className={`swatchBtn${templateId === item.id ? " active" : ""}`}
-                  data-template={item.id}
-                  onClick={() => selectTemplate(item.id)}
-                  title={`${item.label} · ${item.blurb}`}
-                  aria-label={item.label}
-                />
-              ))}
+              {VIDEO_TEMPLATES.filter((item) => item.id !== "host").map(
+                (item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={`swatchBtn${templateId === item.id ? " active" : ""}`}
+                    data-template={item.id}
+                    onClick={() => selectTemplate(item.id)}
+                    title={`${item.label} · ${item.blurb}`}
+                    aria-label={item.label}
+                  />
+                ),
+              )}
             </div>
+            <button
+              type="button"
+              className={templateId === "host" ? "active" : "secondary"}
+              onClick={() => selectTemplate("host")}
+              title="逐字稿分镜 · 竖屏讲解"
+              style={{ padding: "6px 10px", fontSize: 12, borderRadius: 7 }}
+            >
+              主持人
+            </button>
             <span className="meta" style={{ marginTop: 0 }}>
               {activeTemplate.label}
             </span>
@@ -1002,6 +1075,16 @@ function App() {
             >
               {scripting ? "生成中" : "生成逐字稿"}
             </button>
+            {templateId === "host" ? (
+              <button
+                className="secondary"
+                type="button"
+                onClick={generateBeats}
+                disabled={busy || !hasScript}
+              >
+                {planning ? "生成中" : "生成分镜"}
+              </button>
+            ) : null}
             <button
               className="secondary"
               type="button"
@@ -1019,18 +1102,25 @@ function App() {
         <div className="workspaceMain">
           <div className="previewCol">
             <div
-              className={`stage${aspect === "portrait" ? " stage--portrait" : ""}`}
+              className={`stage${
+                templateId === "host" || aspect === "portrait"
+                  ? " stage--portrait"
+                  : ""
+              }`}
             >
               <Player
+                key={templateId === "host" ? "host" : aspect}
                 ref={playerRef}
-                component={MyComponent}
-                inputProps={props}
-                durationInFrames={durationInFrames}
+                component={templateId === "host" ? HostExplainer : MyComponent}
+                inputProps={previewProps}
+                durationInFrames={Math.max(1, durationInFrames)}
                 fps={30}
-                compositionWidth={activeFormat.width}
-                compositionHeight={activeFormat.height}
+                compositionWidth={templateId === "host" ? 1080 : activeFormat.width}
+                compositionHeight={
+                  templateId === "host" ? 1920 : activeFormat.height
+                }
                 style={
-                  aspect === "portrait"
+                  templateId === "host" || aspect === "portrait"
                     ? {
                         width: "auto",
                         height: "min(52vh, 520px)",
