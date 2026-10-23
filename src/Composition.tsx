@@ -82,24 +82,24 @@ const sceneProgress = (frame: number, durationFrames: number) =>
 /** Cover H1 size by Chinese/Latin title length. */
 export const fitCoverTitleSize = (title: string, portrait = false) => {
   const len = [...title.trim()].length;
-  let size = 172;
+  let size = 220;
   if (len <= 6) {
-    size = 172;
+    size = 220;
   } else if (len <= 10) {
-    size = 148;
+    size = 188;
   } else if (len <= 12) {
-    size = 128;
+    size = 168;
   } else if (len <= 14) {
-    size = 112;
+    size = 148;
   } else if (len <= 16) {
-    size = 98;
+    size = 132;
   } else if (len <= 20) {
-    size = 88;
+    size = 118;
   } else {
-    size = 76;
+    size = 104;
   }
   // Portrait can wrap 2 lines — keep size closer to landscape punch.
-  return portrait ? Math.round(size * 0.9) : size;
+  return portrait ? Math.round(size * 0.96) : size;
 };
 
 /** Case meta title — keeps strip height stable. */
@@ -168,7 +168,7 @@ const SceneSubtitles: React.FC<{
   const sceneMs = (frame / fps) * 1000;
   const durationMs = (durationInFrames / fps) * 1000;
   const lineCues = ensureSingleLineCues(cues, fallbackText, durationMs);
-  const text = getActiveCue(lineCues, sceneMs, "", portrait ? 2 : 1);
+  const text = getActiveCue(lineCues, sceneMs, "", portrait ? 8 : 4);
 
   if (!text) {
     return null;
@@ -474,13 +474,13 @@ const CoverScene: React.FC<{
           <div className="coverBrandBlock">
             <p
               className="coverIssueLabel"
-              style={{ fontSize: portrait ? 28 : 38 }}
+              style={{ fontSize: portrait ? 38 : 48 }}
             >
               {issueLabel}
             </p>
             <div
               className="coverBrandLine"
-              style={{ width: portrait ? 88 : 120 }}
+              style={{ width: portrait ? 120 : 160 }}
             />
             <div className="coverThemeBlock">
               <h1
@@ -492,7 +492,7 @@ const CoverScene: React.FC<{
               {video.coverSubtitle && video.coverSubtitle !== headline ? (
                 <span
                   className="coverThemeSub"
-                  style={{ fontSize: portrait ? 28 : 38 }}
+                  style={{ fontSize: portrait ? 38 : 48 }}
                 >
                   {video.coverSubtitle}
                 </span>
@@ -500,7 +500,7 @@ const CoverScene: React.FC<{
             </div>
             <p
               className="coverFooterBrand"
-              style={{ fontSize: portrait ? 20 : 28 }}
+              style={{ fontSize: portrait ? 26 : 34 }}
             >
               {footerLabel}
             </p>
