@@ -1,0 +1,20 @@
+{
+  "source": "public/charactar/PM-1.png",
+  "width": 1086,
+  "height": 1448,
+  "body_paths": 1726,
+  "arm_paths": 182,
+  "svg_bytes": 1093942,
+  "trace_settings": {
+    "color_precision": 7,
+    "layer_difference": 8,
+    "filter_speckle": 6
+  },
+  "manual_work": [
+    "forearm semantic polygon",
+    "skin reconstruction behind smile",
+    "four vector mouths",
+    "two vector eyelids",
+    "wrist pivot"
+  ]
+}

@@ -4,16 +4,22 @@ import type { HostPose } from "../demoScript";
 
 export type HostSection = "intro" | "case" | "closing";
 
-const hostFile = (pose: HostPose, section: HostSection | undefined, open: boolean) => {
-  const name =
-    section === "intro"
-      ? "wave"
-      : section === "closing"
-        ? "think"
-        : pose === "cheer"
-          ? "speak"
-          : "point";
-  return open ? `host/${name}-open.png` : `host/${name}.png`;
+/** Two pose groups: point (PM-1/2) and present (PM-3/4), each closed + open mouth. */
+const HOST_POSES = {
+  point: { closed: "charactar/PM-1.png", open: "charactar/PM-2.png" },
+  present: { closed: "charactar/PM-3.png", open: "charactar/PM-4.png" },
+} as const;
+
+const hostFile = (
+  pose: HostPose,
+  section: HostSection | undefined,
+  open: boolean,
+) => {
+  const group =
+    pose === "cheer" || section === "intro" || section === "closing"
+      ? HOST_POSES.present
+      : HOST_POSES.point;
+  return open ? group.open : group.closed;
 };
 
 const clamp = {
