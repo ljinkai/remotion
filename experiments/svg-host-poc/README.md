@@ -1,6 +1,12 @@
 # PNG → SVG → animation proof of concept
 
-This isolated experiment uses the existing `public/charactar/PM-1.png`. It does not change the current host component or connect speech.
+This standalone experiment uses the existing `public/charactar/PM-1.png` to validate true SVG tracing and controllable animation without speech. The verified result also feeds the existing host integration described below.
+
+## Existing host integration
+
+The verified master is now also used by the shared video host in `src/host-explainer/host/Host.tsx`. Its API and placement are preserved. After rebuilding the experiment master, run `python3 tools/generate-host-svg.py` to refresh `public/charactar/character.svg` and the generated TypeScript layer data. The video renderer imports that data synchronously, preserving fixed vector geometry while React changes only visibility and wrist rotation. No runtime fetch, DOM mutation, or voice integration is involved.
+
+The shared host keeps the existing caller-defined speaking interval. Both `point` and `cheer` cues currently use the verified pointing hand, with different small wrist timing. Intro/closing cues also vary wrist timing; a new hand shape requires new authored artwork. Run `node --test tools/host-animation.test.mjs` for deterministic speaking-boundary, mouth-state, blink/fps, and wrist checks. `render-integrated.mjs` renders and inspects both existing host compositions using the actual Remotion path.
 
 ## Preview
 

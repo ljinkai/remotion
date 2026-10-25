@@ -18,6 +18,14 @@ Open the printed local URL, paste or import a Markdown file, then:
 
 Rendered videos are written to `out/`.
 
+### 数字人主持人
+
+在 Workbench 的模板区域选择 **数字人主持人**，可以直接播放标注为「效果示例」的预览，检查固定人物的嘴型、眨眼和手腕动作；这一步无需调用外部服务，也不会覆盖已有逐字稿、分镜或语音。
+
+制作自己的视频：**生成逐字稿 → 生成分镜 → 播放预览 → 生成 MP4**。语音可选；合成语音后，分镜会重新匹配当前语音字幕时间轴。生成分镜使用已配置的逐字稿模型服务。生成的分镜会在当前 Markdown、语言和逐字稿匹配时从本地缓存恢复。示例仅供预览，自己的分镜生成前不会允许导出示例 MP4。
+
+数字人使用同一份 SVG 母版，Workbench 预览与 MP4 共用人物动画。当前口型按帧合成，并未做音素同步；指向手势支持小幅手腕动作。可运行 `node --test tools/workbench-host.test.mjs tools/host-animation.test.mjs` 验证工作流与动画边界。
+
 ### Azure Speech + 通义千问
 
 Copy `.env.example` to `.env` (or edit the existing `.env`). The workbench loads `.env` automatically on start.
@@ -184,3 +192,19 @@ Supported item fields:
 - `旁白` / `narration`（口播逐字稿；导语/案例/结尾都可写。全部写齐后点「生成逐字稿」会直接载入，不调用千问）
 
 Images can be files under `public/` such as `case-images/example.png`, or remote `https://` URLs.
+
+## 图表与图片重点镜头
+
+数字人模板支持来源数据图表、原图全貌到局部的聚焦，以及跨相邻字幕的策略关系图。预览与导出使用同一份经校验的分镜。
+
+截图中人工核对的数据保存在 `public/host-evidence.json`：每条包含原图路径、SHA-256、单位、图表数据、重点区域和出处。服务端通过 `/api/host-evidence` 仅提供与当前图片摘要一致的条目，并在分镜生成、MP4 导出时重新校验。该清单是人工核对记录，不是自动 OCR；图片更换后需要重新核对。
+
+当前 GojiberryAI 原图提供的是 MRR 阶段，横轴按阶段排列，不假设月份间隔；`$150k+` 保留为下界。年度 ARR 不与月度 MRR 混绘。其他内容没有多点来源数据时使用单值或原有布局，不补造增长曲线。
+
+本轮规范与验收记录见 `openspec/changes/add-evidence-driven-host-visuals/`。
+
+## 按内容组织中间画面
+
+数字人分镜会从当前讲解选择流程、并列要点、明确对比或重点展示。已有缓存也使用同一增强入口，不需要重新生成逐字稿；原句没有依据的功能、数据和因果不会补进画面。真实图片与已核对图表保留，多项不同单位的指标分别展示，不共用比较坐标。
+
+长解释按语义分页，人物在各分镜固定大小，黄色字幕保持上移。当前实现是规则提取与程序动画，不会自动生成真实产品操作录像。规范见 `openspec/changes/improve-content-adaptive-host-scenes/`，独立技术备份见 `docs/technical/content-adaptive-host-scenes.md`。

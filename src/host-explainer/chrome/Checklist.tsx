@@ -8,12 +8,14 @@ export const Checklist: React.FC<{
   title?: string;
   items?: string[];
   entries?: { label: string; index: number }[];
+  compact?: boolean;
 }> = ({
   activeIndex,
   progress,
   title = CHECKLIST_TITLE,
   items = CHECKLIST_ITEMS,
   entries,
+  compact = false,
 }) => {
   const rows =
     entries ??
@@ -21,6 +23,49 @@ export const Checklist: React.FC<{
       label,
       index,
     }));
+  if (compact) {
+    const current = rows.find((row) => row.index === activeIndex);
+    return (
+      <div
+        data-chapter-strip
+        style={{
+          position: "absolute",
+          left: 48,
+          top: 1460,
+          width: 640,
+          borderTop: `2px solid ${theme.ink}`,
+          borderBottom: `1px solid ${theme.line}`,
+          padding: "19px 0",
+          display: "flex",
+          gap: 20,
+          alignItems: "center",
+          zIndex: 3,
+        }}
+      >
+        <span
+          style={{
+            fontSize: 24,
+            fontWeight: 800,
+            color: theme.accent,
+            whiteSpace: "nowrap",
+          }}
+        >
+          {progress}
+        </span>
+        <span
+          style={{
+            fontSize: 25,
+            fontWeight: 700,
+            overflow: "hidden",
+            whiteSpace: "nowrap",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {current?.label || title}
+        </span>
+      </div>
+    );
+  }
   return (
     <div
       style={{

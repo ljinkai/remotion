@@ -8,6 +8,7 @@ import {
   sanitizeSvg,
   validateBeats,
 } from "./beat-spec.mjs";
+import { buildBeatPrompt, planBeats } from "./beat-planner.mjs";
 
 const script = {
   intro: "这期看两个产品",
@@ -22,7 +23,7 @@ const script = {
 };
 
 const props = {
-  cases: [{ index: "01", title: "甲板笔记", image: "case-images/notes.png" }],
+  cases: [{ index: "01", title: "甲板笔记", metric: "$12,000", image: "case-images/notes.png" }],
 };
 
 test("narration lines keep section and case index", () => {
@@ -58,8 +59,8 @@ test("two lines in one case can keep different elements", () => {
     script,
     props,
   );
-  assert.equal(beats[1].elements[0].type, "bar");
-  assert.equal(beats[2].elements[0].type, "image");
+  assert.equal(beats[1].elements[0].type, "image");
+  assert.equal(beats[2].elements.some((element) => element.type === "image"), true);
   assert.notDeepEqual(beats[1].elements, beats[2].elements);
   assert.equal(beats.length, 4);
 });
@@ -88,10 +89,10 @@ test("unknown elements and unsafe svg fall back to text", () => {
   assert.equal(beats[0].elements.some((item) => item.type === "icon"), false);
   assert.equal(beats[0].elements.some((item) => item.type === "image"), false);
   const svg = beats[0].elements.find((item) => item.type === "svg");
-  assert.ok(svg);
-  assert.equal(svg.markup.includes("script"), false);
-  assert.equal(svg.markup.includes("url("), false);
-  assert.equal(svg.markup.includes("<rect"), true);
+  const markup = svg?.markup || sanitizeSvg(`<svg><script>alert(1)</script><path fill="url(http://x)" /><rect width="10" /></svg>`);
+  assert.equal(markup.includes("script"), false);
+  assert.equal(markup.includes("url("), false);
+  assert.equal(markup.includes("<rect"), true);
 });
 
 test("a beat with no surviving elements gets a content block", () => {
@@ -100,11 +101,11 @@ test("a beat with no surviving elements gets a content block", () => {
     { intro: "这句话还在", cases: [], closing: "" },
     { cases: [] },
   );
-  assert.equal(beats[0].elements[0].type, "card");
-  assert.equal(beats[0].elements[0].title, "这句话还在");
+  assert.equal(beats[0].scene, "statement");
+  assert.equal(beats[0].elements[0].items[0].label, "这句话还在");
 });
 
-test("an icon-only beat about posting becomes a phone, not a wave", () => {
+test("a posting keyword alone becomes a statement instead of an invented phone workflow", () => {
   const beats = validateBeats(
     [
       {
@@ -121,9 +122,10 @@ test("an icon-only beat about posting becomes a phone, not a wave", () => {
     { cases: [{ title: "OpenTweet" }] },
   );
   assert.equal(beats[0].elements.some((item) => item.type === "icon"), false);
-  assert.equal(beats[0].elements[0].type, "phone");
-  assert.match(`${beats[0].elements[0].title}${beats[0].elements[0].body}`, /发推|AI Agent/);
-  assert.equal(beats[0].elements[0].action, "发推");
+  assert.equal(beats[0].elements[0].type, "explanation");
+  assert.equal(beats[0].scene, "statement");
+  assert.match(beats[0].elements[0].items[0].label, /发推|AI Agent/);
+  assert.equal(beats[0].elements.some((element) => element.type === "phone"), false);
 });
 
 test("extra model rows are dropped and missing rows are filled", () => {
@@ -137,7 +139,8 @@ test("extra model rows are dropped and missing rows are filled", () => {
   );
   assert.equal(beats.length, 1);
   assert.equal(beats[0].say, "只有一句");
-  assert.equal(beats[0].elements.some((item) => item.text === "甲"), true);
+  assert.equal(beats[0].elements[0].type, "explanation");
+  assert.equal(beats[0].elements[0].items[0].label, "只有一句");
 });
 
 test("sanitizeSvg removes script and foreignObject", () => {
@@ -197,8 +200,8 @@ test("cues are applied in narration order", () => {
   assert.equal(beats[0].endMs, 1000);
   assert.equal(beats[1].startMs, 1000);
   assert.equal(beats[1].endMs, 1900);
-  assert.equal(beats[1].elements[0].type, "bar");
-  assert.equal(beats[2].elements[0].type, "image");
+  assert.equal(beats[1].elements[0].type, "image");
+  assert.equal(beats[2].elements.some((element) => element.type === "image"), true);
   assert.equal(beats[3].startMs, 3000);
 });
 
@@ -215,4 +218,105 @@ test("host template selects its composition and midnight does not", () => {
     compositionIdForProps({ templateId: "host", aspect: "landscape" }),
     "HostExplainer",
   );
+});
+
+test("first case introduction always shows its own content image even after four decorations", () => {
+  const localScript = { cases: [{ narration: "这是一个笔记产品\n它可以记录灵感" }, { narration: "另一个产品" }] };
+  const localProps = { cases: [{ title: "甲", image: "a.png" }, { title: "乙", image: "b.png" }] };
+  const [first, second, third] = validateBeats([
+    { elements: [...Array.from({ length: 4 }, () => ({ type: "text", text: "笔记" })), { type: "image", src: "a.png" }] },
+    { elements: [{ type: "image", src: "a.png", caption: "已有图片" }, { type: "image", src: "b.png" }, { type: "image", src: "https://unknown/image.png" }] },
+  ], localScript, localProps);
+  assert.equal(first.scene, "product");
+  assert.equal(first.elements.length, 4);
+  assert.equal(first.elements[0].src, "a.png");
+  assert.deepEqual(second.elements.filter((element) => element.type === "image"), [{ type: "image", src: "a.png", caption: "已有图片" }]);
+  assert.equal(third.elements[0].src, "b.png");
+});
+
+test("scene routing is factual and keeps exact narration order and default timing", () => {
+  const localScript = { cases: [{ narration: "产品介绍\n每月收入 $12,000\n先打开产品，然后上传文档，最后生成摘要\n自动发布很方便" }] };
+  const result = finalizeBeats({ beats: [{}, {}, { scene: "steps" }, { scene: "invalid" }] }, localScript, { cases: [{ image: "product.png" }] });
+  assert.deepEqual(result.map((beat) => beat.scene), ["product", "metric", "statement", "statement"]);
+  assert.deepEqual(result.map((beat) => beat.say), narrationLines(localScript).map((line) => line.say));
+  assert.deepEqual(result.map((beat) => [beat.startMs, beat.endMs]), [[0, 4000], [4000, 8000], [8000, 12000], [12000, 16000]]);
+  assert.equal(result[1].elements.find((element) => element.type === "text").text, "$12,000");
+  assert.equal(result[2].elements[0].layout, "flow");
+  assert.deepEqual(result[2].elements[0].items.map((item) => item.label), ["先打开产品", "然后上传文档", "最后生成摘要"]);
+  assert.equal(result[3].elements.some((element) => element.type === "phone"), false);
+});
+
+test("unsupported figures and invented sparkline series are removed without fabricating data", () => {
+  const [metric, statement] = validateBeats([
+    { scene: "metric", elements: [{ type: "bar", to: 12000, max: 99999 }, { type: "bar", to: 42000 }, { type: "card", title: "月收入", bars: [10, 20, 30] }, { type: "text", text: "$99999" }] },
+    { scene: "steps", elements: [{ type: "card", title: "使用方法", lines: ["打开应用", "输入内容", "点击生成"] }] },
+  ], { intro: "月收入 $12,000\n这是一个产品结论" }, { cases: [] });
+  assert.equal(metric.scene, "metric");
+  assert.equal(metric.elements.some((element) => element.to === 42000 || element.text === "$99999"), false);
+  assert.equal(metric.elements.find((element) => element.type === "bar").max, undefined);
+  assert.equal(metric.elements.find((element) => element.type === "bar").note, "$12,000");
+  assert.equal(metric.elements.some((element) => element.bars), false);
+  assert.equal(statement.scene, "statement");
+  assert.equal(statement.elements.some((element) => element.lines?.includes("点击生成")), false);
+});
+
+test("an existing metric scene keeps the real source metric prominent while adding the case image", () => {
+  const [beat] = validateBeats([{ elements: [{ type: "bar", to: 4000000 }, { type: "text", text: "400万元" }] }], { cases: [{ narration: "GojiberryAI年收入达到400万美元" }] }, { cases: [{ image: "goji.png" }] });
+  assert.equal(beat.scene, "metric");
+  assert.equal(beat.elements.some((element) => element.src === "goji.png"), true);
+  assert.equal(beat.elements.some((element) => element.text === "400万美元"), true);
+  assert.equal(beat.elements.some((element) => element.text === "400万元"), false);
+  assert.equal(beat.elements.find((element) => element.type === "bar").note, "400万美元");
+});
+
+test("source metrics preserve compact money multipliers, accounting periods and complete duration units", () => {
+  for (const [metric, expanded] of [["$5k MRR", 5000], ["$4M ARR", 4000000], ["3个月", 3]]) {
+    const [beat] = validateBeats([{ scene: "metric", elements: [{ type: "bar", to: expanded }] }], { cases: [{ narration: "产品已经盈利" }] }, { cases: [{ metric }] });
+    assert.equal(beat.scene, "metric");
+    assert.equal(beat.elements.find((element) => element.type === "text").text, metric);
+    assert.equal(beat.elements.find((element) => element.type === "bar").note, metric);
+  }
+  const [direct] = validateBeats([], { intro: "持续运营3个月后达到$5k MRR" }, { cases: [] });
+  assert.equal(direct.elements[0].text, "3个月");
+});
+
+test("legacy truncated numeric headlines regain their source unit while nonnumeric headlines stay intact", () => {
+  const [legacy, authored, compact] = validateBeats([
+    { headline: "GojiberryAI年收入400" },
+    { headline: "可持续的产品收入" },
+    { headline: "月收入5" },
+  ], { intro: "GojiberryAI年收入达到400万美元\n年收入达到400万美元\n月收入达到$5k MRR" }, { cases: [] });
+  assert.equal(legacy.headline, "年收入400万美元");
+  assert.equal(authored.headline, "可持续的产品收入");
+  assert.equal(compact.headline, "月收入$5k MRR");
+});
+
+test("malformed model output falls back conservatively and intro cannot borrow a case image", () => {
+  const result = validateBeats([null, { scene: "metric", elements: "bad" }], { intro: "开场\n只有结论" }, { cases: [{ image: "case.png" }] });
+  assert.deepEqual(result.map((beat) => beat.scene), ["statement", "statement"]);
+  assert.equal(result.some((beat) => beat.elements.some((element) => element.type === "image")), false);
+  const prompt = buildBeatPrompt({ cases: [{ narration: "产品介绍" }] }, { cases: [{ image: "case.png" }] });
+  assert.match(prompt, /第一行/);
+  assert.match(prompt, /1到4/);
+  assert.match(prompt, /不生成 card.bars/);
+  assert.equal(prompt.includes("case.png"), true);
+});
+
+test("malformed model JSON retries then returns deterministic source-backed scenes", async (context) => {
+  const originalKey = process.env.SCRIPT_LLM_API_KEY;
+  process.env.SCRIPT_LLM_API_KEY = "test-only";
+  context.after(() => {
+    if (originalKey === undefined) delete process.env.SCRIPT_LLM_API_KEY;
+    else process.env.SCRIPT_LLM_API_KEY = originalKey;
+  });
+  let requests = 0;
+  context.mock.method(globalThis, "fetch", async () => {
+    requests++;
+    return new Response(JSON.stringify({ choices: [{ message: { content: "malformed output" } }] }), { status: 200 });
+  });
+  const result = await planBeats({ cases: [{ narration: "介绍产品" }] }, { cases: [{ image: "source.png" }] });
+  assert.equal(requests, 2);
+  assert.equal(result[0].scene, "product");
+  assert.equal(result[0].say, "介绍产品");
+  assert.equal(result[0].elements[0].src, "source.png");
 });

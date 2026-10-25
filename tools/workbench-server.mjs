@@ -18,6 +18,7 @@ import {
 } from "./azure-voices.mjs";
 import { compositionIdForProps } from "./beat-spec.mjs";
 import { planBeats } from "./beat-planner.mjs";
+import { loadHostEvidence, withVerifiedHostEvidence } from "./host-evidence.mjs";
 import { enqueueRenderJob } from "./render-job-worker.mjs";
 import { normalizeRenderJobOptions } from "./render-job-options.mjs";
 import { createQueuedJob, publicJobView, readJob } from "./render-job-store.mjs";
@@ -547,7 +548,10 @@ const renderWorkbenchHtml = () => `<!doctype html>
           overflow: auto;
         }
         .cueCol { min-height: 240px; }
-        .stage, .stage--portrait { max-height: min(40vh, 420px); }
+        .stage:not(.stage--portrait) { max-height: min(40vh, 420px); }
+        /* The portrait Player sets its own 9:16 height. Let this padded frame
+           grow around it so small windows do not crop the bottom captions. */
+        .stage--portrait { max-height: none; }
       }
       @media (max-width: 980px) {
         .shell {
@@ -867,7 +871,7 @@ const server = createServer(async (req, res) => {
         sendJson(res, 400, { error: "缺少 props" });
         return;
       }
-      const beats = await planBeats(body.script, body.props);
+      const beats = await planBeats(body.script, await withVerifiedHostEvidence(body.props, root));
       sendJson(res, 200, { beats });
       return;
     }
@@ -890,8 +894,13 @@ const server = createServer(async (req, res) => {
 
     if (req.method === "POST" && pathname === "/api/render") {
       const body = await readJson(req);
-      const result = await renderVideo(body.props);
+      const result = await renderVideo(await withVerifiedHostEvidence(body.props, root));
       sendJson(res, 200, result);
+      return;
+    }
+
+    if (req.method === "GET" && pathname === "/api/host-evidence") {
+      sendJson(res, 200, await loadHostEvidence(root));
       return;
     }
 

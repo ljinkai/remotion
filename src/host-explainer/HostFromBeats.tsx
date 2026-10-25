@@ -1,21 +1,16 @@
 import React from "react";
-import { AbsoluteFill, Audio, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
+import { AbsoluteFill, Audio, useCurrentFrame, useVideoConfig } from "remotion";
 import { assetSrc } from "../Composition";
 import { Checklist } from "./chrome/Checklist";
 import { ElementStage } from "./ElementStage";
 import { Host } from "./host/Host";
 import type { HostBeat, HostExplainerProps } from "./hostTypes";
 import { theme } from "./theme";
+import { deriveHostScene } from "./sceneContent";
+import { continuousSceneWindow } from "./richSceneMath";
+import { HostCaptions } from "./HostCaptionArea";
 
-const clamp = {
-  extrapolateLeft: "clamp" as const,
-  extrapolateRight: "clamp" as const,
-};
-
-const checklistEntries = (
-  titles: string[],
-  active: number | null,
-) => {
+const checklistEntries = (titles: string[], active: number | null) => {
   if (titles.length <= 4) {
     return titles.map((label, index) => ({ label, index }));
   }
@@ -61,7 +56,9 @@ const Headline: React.FC<{ text: string; accent: string }> = ({
     >
       {before}
       {index >= 0 ? (
-        <span style={{ color: theme.accent, fontStyle: "italic" }}>{accent}</span>
+        <span style={{ color: theme.accent, fontStyle: "italic" }}>
+          {accent}
+        </span>
       ) : null}
       {after}
     </h1>
@@ -98,20 +95,17 @@ export const HostExplainer: React.FC<HostExplainerProps> = ({
 
   const index = activeBeat(beats, frame, fps);
   const beat = beats[index];
+  const rich = ["product", "metric", "relationship"].includes(
+    deriveHostScene(beat.elements, beat.scene),
+  );
+  const sceneWindow = continuousSceneWindow(beats, index, frame, fps);
   const startFrame = Math.round((beat.startMs / 1000) * fps);
   const durationFrames = Math.max(
     1,
     Math.round(((beat.endMs - beat.startMs) / 1000) * fps),
   );
   const localFrame = Math.max(0, frame - startFrame);
-  const subtitleOpacity = interpolate(
-    localFrame,
-    [Math.max(0, durationFrames - 12), Math.max(1, durationFrames - 1)],
-    [1, 0],
-    clamp,
-  );
-  const caseTitle =
-    beat.caseIndex !== null ? titles[beat.caseIndex] || "" : "";
+  const caseTitle = beat.caseIndex !== null ? titles[beat.caseIndex] || "" : "";
   const chapter =
     beat.section === "intro"
       ? "// 开场"
@@ -171,15 +165,24 @@ export const HostExplainer: React.FC<HostExplainerProps> = ({
         <Headline text={beat.headline} accent={beat.accent} />
       </div>
       <ElementStage
+        narration={beat.say}
         elements={beat.elements}
+        scene={beat.scene}
         localFrame={localFrame}
         durationFrames={durationFrames}
+        sceneFrame={sceneWindow.frame}
+        sceneDuration={sceneWindow.duration}
+        expanded={rich}
       />
       <Checklist
+        compact={rich}
         title="// 本期案例"
         activeIndex={beat.section === "case" ? beat.caseIndex : null}
         progress={progress}
-        entries={checklistEntries(titles, beat.section === "case" ? beat.caseIndex : null)}
+        entries={checklistEntries(
+          titles,
+          beat.section === "case" ? beat.caseIndex : null,
+        )}
       />
       <Host
         pose={beat.host}
@@ -188,21 +191,11 @@ export const HostExplainer: React.FC<HostExplainerProps> = ({
         speakFrom={12}
         speakTo={Math.max(13, durationFrames - 12)}
       />
-      <div
-        style={{
-          position: "absolute",
-          top: 1596,
-          left: 48,
-          width: 640,
-          textAlign: "center",
-          fontSize: 32,
-          fontWeight: 700,
-          opacity: subtitleOpacity,
-          zIndex: 6,
-        }}
-      >
-        {beat.say}
-      </div>
+      <HostCaptions
+        text={beat.say}
+        localFrame={localFrame}
+        durationFrames={durationFrames}
+      />
     </AbsoluteFill>
   );
 };

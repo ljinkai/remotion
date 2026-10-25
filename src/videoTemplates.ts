@@ -48,8 +48,8 @@ export const VIDEO_TEMPLATES: VideoTemplate[] = [
   },
   {
     id: "host",
-    label: "主持人",
-    blurb: "逐字稿分镜 · 竖屏讲解",
+    label: "数字人主持人",
+    blurb: "固定人物 · 嘴型、眨眼、手势 · 逐字稿分镜竖屏讲解",
     caseColors: ["#ff4d1c", "#161616", "#f4f1ea", "#c4b5a4", "#8a8178"],
   },
 ];

@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { MyComponent } from "../src/Composition";
 import { HostExplainer } from "../src/host-explainer/HostFromBeats";
-import { hostDurationInFrames } from "../src/host-explainer/hostTypes";
+import { hostDurationInFrames, sampleHostProps } from "../src/host-explainer/hostTypes";
 import {
   parseMarkdownToVideo,
   sampleMarkdown,
@@ -26,6 +26,12 @@ import {
 } from "../src/videoFormats";
 import { buildXhsPublishCopy } from "../src/xhsCopy";
 import { CueTimelinePanel } from "./cue-timeline-panel";
+import {
+  HOST_BEATS_CACHE_KEY,
+  hostBeatsContentKey,
+  restoreHostBeats,
+  hostWorkflowState,
+} from "./workbench-host.mjs";
 
 const savedMarkdown =
   localStorage.getItem("remotion-markdown") || sampleMarkdown;
@@ -134,6 +140,7 @@ const persistSynthCache = (markdown, locale, voice, script, props) => {
 const clearWorkbenchMediaCache = () => {
   localStorage.removeItem(SCRIPT_CACHE_KEY);
   localStorage.removeItem(SYNTH_CACHE_KEY);
+  localStorage.removeItem(HOST_BEATS_CACHE_KEY);
 };
 
 function App() {
@@ -150,7 +157,10 @@ function App() {
   const [synthesizing, setSynthesizing] = useState(false);
   const [scripting, setScripting] = useState(false);
   const [planning, setPlanning] = useState(false);
-  const [beats, setBeats] = useState(null);
+  const [beats, setBeats] = useState(() => restoreHostBeats(
+    readJsonStorage(HOST_BEATS_CACHE_KEY),
+    hostBeatsContentKey(savedMarkdown, savedWeeklyLocale, loadCachedScript(savedMarkdown, savedWeeklyLocale)),
+  ));
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [script, setScript] = useState(() =>
@@ -171,6 +181,15 @@ function App() {
   const [weeklyIssues, setWeeklyIssues] = useState([]);
   const [weeklyLoading, setWeeklyLoading] = useState(false);
   const [weeklyFilling, setWeeklyFilling] = useState(null);
+  const [hostEvidence, setHostEvidence] = useState([]);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/host-evidence")
+      .then((response) => response.ok ? response.json() : { profiles: [] })
+      .then((body) => { if (!cancelled) setHostEvidence(Array.isArray(body.profiles) ? body.profiles : []); })
+      .catch(() => { /* Original-image preview remains available without reviewed metadata. */ });
+    return () => { cancelled = true; };
+  }, []);
 
   const parsedProps = useMemo(
     () => parseMarkdownToVideo(markdown, { locale: weeklyLocale }),
@@ -188,22 +207,27 @@ function App() {
       ...(synthesizedProps ?? scriptedProps),
       templateId,
       aspect,
+      hostEvidence,
     }),
-    [synthesizedProps, scriptedProps, templateId, aspect],
+    [synthesizedProps, scriptedProps, templateId, aspect, hostEvidence],
+  );
+  const hostWorkflow = useMemo(
+    () => hostWorkflowState(props, beats, sampleHostProps),
+    [props, beats],
   );
   const previewProps = useMemo(
     () =>
       templateId === "host"
-        ? { ...props, beats: beats ?? [], aspect: "portrait" }
+        ? hostWorkflow.previewProps
         : props,
-    [props, templateId, beats],
+    [props, templateId, hostWorkflow],
   );
   const durationInFrames = useMemo(
     () =>
       templateId === "host"
-        ? hostDurationInFrames(beats ?? [])
+        ? hostDurationInFrames(hostWorkflow.previewProps.beats)
         : getDurationInFrames(props),
-    [templateId, beats, props],
+    [templateId, hostWorkflow, props],
   );
   const hasVoice = props.useSynthesizedTimeline === true;
   const hasScript = scriptIsComplete(script);
@@ -221,6 +245,17 @@ function App() {
   useEffect(() => {
     persistScriptCache(markdown, weeklyLocale, script);
   }, [markdown, weeklyLocale, script]);
+
+  useEffect(() => {
+    if (!beats?.length) {
+      localStorage.removeItem(HOST_BEATS_CACHE_KEY);
+      return;
+    }
+    writeJsonStorage(HOST_BEATS_CACHE_KEY, {
+      contentKey: hostBeatsContentKey(markdown, weeklyLocale, script),
+      beats,
+    });
+  }, [markdown, weeklyLocale, script, beats]);
 
   useEffect(() => {
     persistSynthCache(
@@ -243,10 +278,13 @@ function App() {
     if (synthesizedProps?.useSynthesizedTimeline) {
       parts.push("语音");
     }
+    if (beats?.length) {
+      parts.push("数字人分镜");
+    }
     if (parts.length === 0) {
       return;
     }
-    setStatus(`已从本地缓存恢复${parts.join("与")}，可直接生成视频`);
+    setStatus(`已从本地缓存恢复${parts.join("与")}`);
     // Only announce once on mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -600,7 +638,7 @@ function App() {
       setBeats(body.beats);
       setCurrentFrame(0);
       playerRef.current?.seekTo(0);
-      setStatus(`已生成 ${body.beats.length} 条分镜，可预览或导出竖屏`);
+      setStatus(`已生成 ${body.beats.length} 条分镜，数字人主持人已应用，可播放预览或生成 MP4`);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setStatus("");
@@ -688,6 +726,10 @@ function App() {
   };
 
   const renderVideo = async () => {
+    if (templateId === "host" && !hostWorkflow.canRender) {
+      setError("当前展示数字人效果示例，请先生成逐字稿和分镜，再生成你的 MP4");
+      return;
+    }
     setRendering(true);
     setError("");
     setStatus(hasVoice ? "渲染中..." : "渲染中（未合成语音，使用固定时长）...");
@@ -1020,10 +1062,10 @@ function App() {
               type="button"
               className={templateId === "host" ? "active" : "secondary"}
               onClick={() => selectTemplate("host")}
-              title="逐字稿分镜 · 竖屏讲解"
+              title="固定数字人 · 张嘴、眨眼、手势 · 逐字稿分镜竖屏视频"
               style={{ padding: "6px 10px", fontSize: 12, borderRadius: 7 }}
             >
-              主持人
+              数字人主持人
             </button>
             <span className="meta" style={{ marginTop: 0 }}>
               {activeTemplate.label}
@@ -1093,7 +1135,7 @@ function App() {
             >
               {synthesizing ? "合成中" : "合成语音"}
             </button>
-            <button type="button" onClick={renderVideo} disabled={busy}>
+            <button type="button" onClick={renderVideo} disabled={busy || (templateId === "host" && !hostWorkflow.canRender)}>
               {rendering ? "渲染中" : "生成 MP4"}
             </button>
           </div>
@@ -1101,6 +1143,13 @@ function App() {
 
         <div className="workspaceMain">
           <div className="previewCol">
+            {templateId === "host" ? (
+              <p className="previewMeta" role="status" style={{ marginTop: 0 }}>
+                {hostWorkflow.isSample
+                  ? "正在展示数字人效果示例，可直接播放。制作你的视频：生成逐字稿 → 生成分镜 → 生成 MP4；语音可选。"
+                  : `已应用数字人主持人 · ${previewProps.beats.length} 条分镜 · 预览与 MP4 使用同一人物动画。语音合成后会自动更新时间轴。`}
+              </p>
+            ) : null}
             <div
               className={`stage${
                 templateId === "host" || aspect === "portrait"

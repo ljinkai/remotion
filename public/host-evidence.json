@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "profiles": [
+    {
+      "image": "case-images/03-gojiberryai.png",
+      "sha256": "49367747fdae22bf2d41657c07e5145597e9bc8408bfa169303ea6f9d8929ca4",
+      "title": "GojiberryAI 原文截图",
+      "reviewedAt": "2026-10-25",
+      "evidenceText": "原图分阶段描述 $0 → $6K MRR、$6k → $25k MRR、$25k → $75k MRR、$75k → $150k MRR 以及 $150k+ MRR。来源为人工核对的原图，不是自动 OCR。",
+      "focus": {
+        "x": 0.5,
+        "y": 0.2,
+        "width": 0.47,
+        "height": 0.48,
+        "label": "原文中的 MRR 阶段与渠道"
+      },
+      "chart": {
+        "type": "chart",
+        "chartType": "milestones",
+        "title": "MRR 发展阶段",
+        "unit": "USD / 月 · MRR",
+        "data": [
+          {
+            "label": "起步",
+            "value": 0,
+            "display": "$0"
+          },
+          {
+            "label": "主动外拓",
+            "value": 6000,
+            "display": "$6k",
+            "note": "冷邮件与 LinkedIn"
+          },
+          {
+            "label": "Reddit",
+            "value": 25000,
+            "display": "$25k",
+            "note": "产品教育内容"
+          },
+          {
+            "label": "内容营销",
+            "value": 75000,
+            "display": "$75k",
+            "note": "内容与方法论"
+          },
+          {
+            "label": "后续阶段",
+            "value": 150000,
+            "display": "$150k+",
+            "note": "原文标为 $150k+ MRR，此值仅为下界，不代表精确终点"
+          }
+        ],
+        "source": "来源：GojiberryAI 原文截图 · 人工核对；横轴为阶段，非日期"
+      },
+      "relationship": {
+        "type": "relationship",
+        "title": "逐阶段聚焦渠道",
+        "nodes": [
+          "主动外拓",
+          "Reddit",
+          "内容营销",
+          "合作伙伴"
+        ],
+        "focus": 0,
+        "mode": "focus"
+      }
+    }
+  ]
+}
