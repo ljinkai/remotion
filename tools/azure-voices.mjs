@@ -3,7 +3,7 @@
  * 优先用区域 credentials 拉取实时列表；失败时回退到这份精选清单。
  */
 
-export const DEFAULT_AZURE_VOICE = "zh-CN-YunxiNeural";
+export const DEFAULT_AZURE_VOICE = "zh-CN-XiaochenNeural";
 export const DEFAULT_EN_AZURE_VOICE = "en-US-GuyNeural";
 
 /** @typedef {{ id: string, name: string, gender: "Female"|"Male"|"Unknown", locale: string, localeName: string, styles?: string[] }} AzureVoiceOption */

@@ -1,18 +1,9 @@
 import React from "react";
-import {
-  AbsoluteFill,
-  Sequence,
-  interpolate,
-  useCurrentFrame,
-} from "remotion";
+import { AbsoluteFill, Sequence, interpolate, useCurrentFrame } from "remotion";
 import { Checklist } from "./chrome/Checklist";
-import {
-  BEATS,
-  BEAT_FRAMES,
-  getBeatIndex,
-  getLocalFrame,
-} from "./demoScript";
+import { BEATS, BEAT_FRAMES, getBeatIndex, getLocalFrame } from "./demoScript";
 import { Host } from "./host/Host";
+import { HostLocaleProvider } from "./hostLocale";
 import { PhoneBeat } from "./scenes/PhoneBeat";
 import { ProductGrid } from "./scenes/ProductGrid";
 import { RevenueBar } from "./scenes/RevenueBar";
@@ -46,7 +37,9 @@ const Headline: React.FC<{ text: string; accent: string }> = ({
     >
       {before}
       {index >= 0 ? (
-        <span style={{ color: theme.accent, fontStyle: "italic" }}>{accent}</span>
+        <span style={{ color: theme.accent, fontStyle: "italic" }}>
+          {accent}
+        </span>
       ) : null}
       {after}
     </h1>
@@ -71,95 +64,102 @@ export const HostExplainerDemo: React.FC = () => {
   );
 
   return (
-    <AbsoluteFill
-      style={{
-        fontFamily: theme.font,
-        color: theme.ink,
-        backgroundColor: theme.paper,
-      }}
-    >
+    <HostLocaleProvider value="zh">
       <AbsoluteFill
         style={{
-          backgroundImage: `radial-gradient(circle, ${theme.dot} 1.3px, transparent 1.5px)`,
-          backgroundSize: "18px 18px",
-        }}
-      />
-      <div
-        style={{
-          position: "absolute",
-          top: 72,
-          left: 64,
-          fontSize: theme.chapterSize,
-          letterSpacing: "0.04em",
-          color: theme.muted,
-          zIndex: 5,
+          fontFamily: theme.font,
+          color: theme.ink,
+          backgroundColor: theme.paper,
         }}
       >
-        {beat.chapter}
-      </div>
-      <div
-        style={{
-          position: "absolute",
-          top: 72,
-          right: 64,
-          fontSize: theme.chapterSize,
-          letterSpacing: "0.04em",
-          color: theme.muted,
-          zIndex: 5,
-        }}
-      >
-        {beat.progressLabel}
-        <span style={{ color: theme.accent, fontWeight: 760 }}>
-          {beat.progressValue}
-        </span>
-      </div>
-
-      <AbsoluteFill style={{ opacity: contentOpacity }}>
+        <AbsoluteFill
+          style={{
+            backgroundImage: `radial-gradient(circle, ${theme.dot} 1.3px, transparent 1.5px)`,
+            backgroundSize: "18px 18px",
+          }}
+        />
         <div
           style={{
             position: "absolute",
-            top: 168,
+            top: 72,
             left: 64,
-            width: 952,
+            fontSize: theme.chapterSize,
+            letterSpacing: "0.04em",
+            color: theme.muted,
+            zIndex: 5,
           }}
         >
-          <Headline text={beat.headline} accent={beat.accent} />
+          {beat.chapter}
         </div>
-        {BEATS.map((item, index) => {
-          const Scene = scenes[index];
-          return (
-            <Sequence
-              key={item.id}
-              from={item.startFrame}
-              durationInFrames={BEAT_FRAMES}
-            >
-              <Scene />
-            </Sequence>
-          );
-        })}
-      </AbsoluteFill>
+        <div
+          style={{
+            position: "absolute",
+            top: 72,
+            right: 64,
+            fontSize: theme.chapterSize,
+            letterSpacing: "0.04em",
+            color: theme.muted,
+            zIndex: 5,
+          }}
+        >
+          {beat.progressLabel}
+          <span style={{ color: theme.accent, fontWeight: 760 }}>
+            {beat.progressValue}
+          </span>
+        </div>
 
-      <Checklist
-        activeIndex={beat.checklistIndex}
-        progress={beat.progressValue}
-      />
-      <Host pose={beat.pose} localFrame={local} speakFrom={12} speakTo={138} />
-      <div
-        style={{
-          position: "absolute",
-          top: 1596,
-          left: 48,
-          width: 640,
-          textAlign: "center",
-          fontSize: 32,
-          fontWeight: 700,
-          lineHeight: 1.3,
-          opacity: subtitleOpacity,
-          zIndex: 6,
-        }}
-      >
-        {beat.subtitle}
-      </div>
-    </AbsoluteFill>
+        <AbsoluteFill style={{ opacity: contentOpacity }}>
+          <div
+            style={{
+              position: "absolute",
+              top: 168,
+              left: 64,
+              width: 952,
+            }}
+          >
+            <Headline text={beat.headline} accent={beat.accent} />
+          </div>
+          {BEATS.map((item, index) => {
+            const Scene = scenes[index];
+            return (
+              <Sequence
+                key={item.id}
+                from={item.startFrame}
+                durationInFrames={BEAT_FRAMES}
+              >
+                <Scene />
+              </Sequence>
+            );
+          })}
+        </AbsoluteFill>
+
+        <Checklist
+          activeIndex={beat.checklistIndex}
+          progress={beat.progressValue}
+        />
+        <Host
+          pose={beat.pose}
+          localFrame={local}
+          speakFrom={12}
+          speakTo={138}
+        />
+        <div
+          style={{
+            position: "absolute",
+            top: 1596,
+            left: 48,
+            width: 640,
+            textAlign: "center",
+            fontSize: 32,
+            fontWeight: 700,
+            lineHeight: 1.3,
+            opacity: subtitleOpacity,
+            zIndex: 6,
+          }}
+        >
+          {beat.subtitle}
+        </div>
+      </AbsoluteFill>
+    </HostLocaleProvider>
   );
 };

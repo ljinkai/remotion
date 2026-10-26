@@ -1,7 +1,10 @@
-import React from "react";
+import React, { useContext } from "react";
 import { useCurrentFrame, useVideoConfig } from "remotion";
 import type { HostPose } from "../demoScript";
 import { hostCharacter } from "./character.generated";
+import { HostLocaleContext } from "../hostLocale";
+import { FemaleHost } from "./FemaleHost";
+import { hostPresenterForLocale } from "./hostPresenter";
 import {
   hostAnimationState,
   hostFrameLayout,
@@ -29,6 +32,7 @@ export const Host: React.FC<{
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
+  const presenter = hostPresenterForLocale(useContext(HostLocaleContext));
   const state = hostAnimationState({
     frame,
     fps,
@@ -50,45 +54,51 @@ export const Host: React.FC<{
         pointerEvents: "none",
       }}
     >
-      <svg
-        data-host-character="svg"
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox={hostCharacter.viewBox}
-        width="100%"
-        height="100%"
-        role="img"
-        aria-label="程序员数字人主持人"
-      >
-        {/* Trusted build-time paths; these strings never change between frames. */}
-        <g
-          data-host-part="body"
-          dangerouslySetInnerHTML={{ __html: hostCharacter.body }}
-        />
-        <g
-          data-host-part="pointing-arm"
-          transform={`rotate(${state.arm.toFixed(4)} 147 894)`}
-          dangerouslySetInnerHTML={{ __html: hostCharacter.arm }}
-        />
-        <g
-          data-host-part="eyelids"
-          fill="#FFD0A0"
-          stroke="#342821"
-          strokeWidth={5}
-          strokeLinecap="round"
-          visibility={state.blink ? "visible" : "hidden"}
-          dangerouslySetInnerHTML={{ __html: hostCharacter.eyelids }}
-        />
-        <g data-host-part="mouth" transform={hostCharacter.mouthTransform}>
-          {mouths.map((mouth) => (
-            <g
-              key={mouth}
-              data-host-mouth={mouth}
-              visibility={state.mouth === mouth ? "visible" : "hidden"}
-              dangerouslySetInnerHTML={{ __html: hostCharacter.mouths[mouth] }}
-            />
-          ))}
-        </g>
-      </svg>
+      {presenter === "asian-female" ? (
+        <FemaleHost mouth={state.mouth} frame={frame} fps={fps} />
+      ) : (
+        <svg
+          data-host-character="svg"
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox={hostCharacter.viewBox}
+          width="100%"
+          height="100%"
+          role="img"
+          aria-label="Male programmer presenter"
+        >
+          {/* Trusted build-time paths; these strings never change between frames. */}
+          <g
+            data-host-part="body"
+            dangerouslySetInnerHTML={{ __html: hostCharacter.body }}
+          />
+          <g
+            data-host-part="pointing-arm"
+            transform={`rotate(${state.arm.toFixed(4)} 147 894)`}
+            dangerouslySetInnerHTML={{ __html: hostCharacter.arm }}
+          />
+          <g
+            data-host-part="eyelids"
+            fill="#FFD0A0"
+            stroke="#342821"
+            strokeWidth={5}
+            strokeLinecap="round"
+            visibility={state.blink ? "visible" : "hidden"}
+            dangerouslySetInnerHTML={{ __html: hostCharacter.eyelids }}
+          />
+          <g data-host-part="mouth" transform={hostCharacter.mouthTransform}>
+            {mouths.map((mouth) => (
+              <g
+                key={mouth}
+                data-host-mouth={mouth}
+                visibility={state.mouth === mouth ? "visible" : "hidden"}
+                dangerouslySetInnerHTML={{
+                  __html: hostCharacter.mouths[mouth],
+                }}
+              />
+            ))}
+          </g>
+        </svg>
+      )}
     </div>
   );
 };

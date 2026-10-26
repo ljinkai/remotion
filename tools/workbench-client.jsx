@@ -40,7 +40,7 @@ const savedTemplate = resolveTemplateId(
 );
 const savedAspect = resolveAspect(localStorage.getItem("remotion-aspect"));
 const savedVoice =
-  localStorage.getItem("remotion-voice") || "zh-CN-YunxiNeural";
+  localStorage.getItem("remotion-voice") || "zh-CN-XiaochenNeural";
 const savedWeeklyLocale =
   localStorage.getItem("remotion-weekly-locale") === "en" ? "en" : "zh";
 
@@ -323,7 +323,7 @@ function App() {
   };
 
   const selectVoice = (id) => {
-    const next = String(id || "").trim() || "zh-CN-YunxiNeural";
+    const next = String(id || "").trim() || "zh-CN-XiaochenNeural";
     setVoiceId(next);
     localStorage.setItem("remotion-voice", next);
     setSynthesizedProps(null);
@@ -345,7 +345,7 @@ function App() {
         setVoicesSource(body.source || "");
         const defaultVoice =
           body.defaultVoice ||
-          (weeklyLocale === "en" ? "en-US-GuyNeural" : "zh-CN-YunxiNeural");
+          (weeklyLocale === "en" ? "en-US-GuyNeural" : "zh-CN-XiaochenNeural");
         const currentOk = (body.voices || []).some(
           (item) => item.id === voiceId,
         );
@@ -448,7 +448,7 @@ function App() {
     if (isEn === currentIsEn) {
       return;
     }
-    const preferred = isEn ? "en-US-GuyNeural" : "zh-CN-YunxiNeural";
+    const preferred = isEn ? "en-US-GuyNeural" : "zh-CN-XiaochenNeural";
     const match = voices.find((item) => item.id === preferred);
     const fallback = voices.find((item) =>
       isEn ? /^en[-_]/i.test(item.id) : /^zh[-_]/i.test(item.id),

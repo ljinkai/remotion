@@ -99,7 +99,7 @@ Create body:
   "options": {
     "skip_ai_script": false,
     "locale": "zh",
-    "voice": "zh-CN-YunxiNeural",
+    "voice": "zh-CN-XiaochenNeural",
     "aspect": "portrait",
     "aspects": ["portrait"],
     "template_id": "midnight"
