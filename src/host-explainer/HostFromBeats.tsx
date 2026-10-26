@@ -11,6 +11,7 @@ import { continuousSceneWindow } from "./richSceneMath";
 import { HostLocaleProvider, hostLabels, type HostLocale } from "./hostLocale";
 import { hostCaptionPages, hostCaptionPageAtFrame } from "./hostCaptions";
 import { HostCaptions } from "./HostCaptionArea";
+import { SinglePostCover } from "./SinglePostCover";
 import { postGalleryElements } from "./postGallery";
 
 const checklistEntries = (titles: string[], active: number | null) => {
@@ -89,6 +90,8 @@ export const HostExplainer: React.FC<HostExplainerProps> = ({
   narrationAudioSrc,
   locale = "zh",
   contentMode,
+  coverTitle,
+  introSubtitle,
   sourceUrl,
   sourceAuthor,
 }) => {
@@ -148,8 +151,30 @@ export const HostExplainer: React.FC<HostExplainerProps> = ({
         ? labels.intro
         : labels.closing;
 
+  if (singlePost && (index === 0 || beat.section === "intro")) {
+    return (
+      <HostLocaleProvider value={locale}>
+        {narrationAudioSrc ? (
+          <Audio src={assetSrc(narrationAudioSrc)} volume={0.95} />
+        ) : null}
+        <SinglePostCover
+          title={coverTitle || cases[0]?.title || beat.headline}
+          summary={introSubtitle || beat.say}
+          image={cases[0]?.images?.[0] || cases[0]?.image}
+          sourceUrl={sourceUrl}
+          sourceAuthor={sourceAuthor}
+          localFrame={localFrame}
+          durationFrames={durationFrames}
+        />
+      </HostLocaleProvider>
+    );
+  }
+
   return (
     <HostLocaleProvider value={locale}>
+      {narrationAudioSrc ? (
+        <Audio src={assetSrc(narrationAudioSrc)} volume={0.95} />
+      ) : null}
       <AbsoluteFill style={{ backgroundColor: theme.paper }} />
       <AbsoluteFill
         style={{
@@ -164,9 +189,6 @@ export const HostExplainer: React.FC<HostExplainerProps> = ({
             : {}),
         }}
       >
-        {narrationAudioSrc ? (
-          <Audio src={assetSrc(narrationAudioSrc)} volume={0.95} />
-        ) : null}
         <AbsoluteFill
           style={{
             backgroundImage: `radial-gradient(circle, ${theme.dot} 1.3px, transparent 1.5px)`,

@@ -36,11 +36,12 @@ const result = await build({
   ],
 });
 const module = { exports: {} };
+let currentFrame = 30;
 const runtime = (id) =>
   id === "remotion"
     ? {
         ...require(id),
-        useCurrentFrame: () => 30,
+        useCurrentFrame: () => currentFrame,
         useVideoConfig: () => ({
           fps: 30,
           width: 1080,
@@ -256,4 +257,46 @@ test("short English fact and full-width feature labels are visible together with
     ],
   });
   assert.match(feature, /Support publishing to multiple platforms\./);
+});
+
+
+test("single-post frame zero and full intro show the source image and static cover", () => {
+  const props = {
+    contentMode: "single_post",
+    locale: "en",
+    coverTitle: "Trustworthy SaaS solves real problems",
+    introSubtitle: "Customers still pay for dependable tools.",
+    sourceUrl: "https://www.reddit.com/r/indiehackers/post",
+    sourceAuthor: "Original maker",
+    cases: [{ images: ["https://example.com/original.png"] }],
+    beats: [beat("intro"), { ...beat("case"), startMs: 8000, endMs: 16000 }],
+  };
+  try {
+    for (const frame of [0, 30, 239]) {
+      currentFrame = frame;
+      const html = render(props);
+      assert.match(html, /data-single-post-cover/);
+      assert.match(html, /data-cover-content="source-image"/);
+      assert.match(html, /https:\/\/example.com\/original.png/);
+      assert.match(html, /Trustworthy SaaS solves real problems/);
+      assert.match(html, /Original maker/);
+      assert.doesNotMatch(html, /opacity:0|scale\(0.86\)/);
+    }
+    currentFrame = 240;
+    assert.doesNotMatch(render(props), /data-single-post-cover/);
+  } finally { currentFrame = 30; }
+});
+
+test("imageless single-post cover uses the actual English hook without invented metrics", () => {
+  currentFrame = 0;
+  try {
+    const html = render({
+      contentMode: "single_post", locale: "en", beats: [beat("intro")],
+      coverTitle: "Build tools customers trust",
+      introSubtitle: "Customers still pay for dependable tools.",
+    });
+    assert.match(html, /data-cover-content="key-point"/);
+    assert.match(html, /Customers still pay for dependable tools/);
+    assert.doesNotMatch(html, /<img|\$12,000|opacity:0/);
+  } finally { currentFrame = 30; }
 });

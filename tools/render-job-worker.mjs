@@ -58,6 +58,7 @@ export const buildCallbackPayload = (job, extra = {}) => ({
           extra.status === "done"
         ? job.video_url
         : null,
+  cover_url: job.cover_url ?? null,
   aspect: extra.aspect || job.options?.aspect || "portrait",
   error:
     (extra.status || job.status) === "failed"
@@ -127,7 +128,7 @@ export const deliverCallback = async (root, jobId, extra = {}) => {
 const localRemotionCommand = (root) =>
   path.join(root, "node_modules", ".bin", "remotion");
 
-const renderToPath = async (root, props, outputPath, propsPath) => {
+const renderToPath = async (root, props, outputPath, propsPath, still = false) => {
   await writeFile(propsPath, JSON.stringify(props, null, 2), "utf8");
   const compositionId = compositionIdForProps(props);
   const command = localRemotionCommand(root);
@@ -135,11 +136,12 @@ const renderToPath = async (root, props, outputPath, propsPath) => {
     const proc = spawn(
       command,
       [
-        "render",
+        still ? "still" : "render",
         compositionId,
         outputPath,
         `--props=${propsPath}`,
         "--public-dir=public",
+        ...(still ? ["--frame=0", "--image-format=png"] : []),
       ],
       { cwd: root, stdio: ["ignore", "pipe", "pipe"] },
     );
@@ -165,6 +167,9 @@ const renderToPath = async (root, props, outputPath, propsPath) => {
   });
 };
 
+const renderCoverToPath = (root, props, outputPath, propsPath) =>
+  renderToPath(root, props, outputPath, propsPath, true);
+
 const markdownHasFullNarration = async (root, markdown) => {
   const runtime = await loadMarkdownRuntime(root);
   const script = runtime.tryBuildScriptFromMarkdown(markdown);
@@ -187,6 +192,7 @@ export const runOneJob = async (root, jobId, dependencies = {}) => {
       dependencies.synthesizeVideoProps || synthesizeVideoProps;
     const planner = dependencies.planBeats || planBeats;
     const render = dependencies.renderToPath || renderToPath;
+    const renderCover = dependencies.renderCoverToPath || renderCoverToPath;
     const upload = dependencies.uploadFileToQiniu || uploadFileToQiniu;
     const qiniuConfig = dependencies.getQiniuConfig || getQiniuConfig;
     const embedAudio =
@@ -309,6 +315,8 @@ export const runOneJob = async (root, jobId, dependencies = {}) => {
       const propsPath = path.join(workDir, `render-props-${aspect}.json`);
       const renderProps = { ...renderPropsBase, aspect };
       await render(root, renderProps, outputPath, propsPath);
+      const coverPath = path.join(workDir, "cover.png");
+      if (single) await renderCover(root, renderProps, coverPath, propsPath);
 
       await updateJob(root, jobId, {
         status: "uploading",
@@ -320,7 +328,11 @@ export const runOneJob = async (root, jobId, dependencies = {}) => {
       const videoUrl = await upload(outputPath, objectKey);
       urlsByAspect[aspect] = videoUrl;
 
+      const coverUrl = single
+        ? await upload(coverPath, objectKey.replace(/\.mp4$/, "-cover.png"))
+        : null;
       const patch = {
+        ...(single ? { cover_url: coverUrl } : {}),
         video_urls: { ...urlsByAspect },
       };
       if (aspect === "landscape") {

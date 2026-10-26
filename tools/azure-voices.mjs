@@ -4,7 +4,7 @@
  */
 
 export const DEFAULT_AZURE_VOICE = "zh-CN-YunxiNeural";
-export const DEFAULT_EN_AZURE_VOICE = "en-US-JennyNeural";
+export const DEFAULT_EN_AZURE_VOICE = "en-US-GuyNeural";
 
 /** @typedef {{ id: string, name: string, gender: "Female"|"Male"|"Unknown", locale: string, localeName: string, styles?: string[] }} AzureVoiceOption */
 

@@ -149,7 +149,7 @@ test("persistent client_ref deduplicates concurrent creates and retries", async 
   assert.equal(weekly.content_mode, "weekly");
 });
 
-const dependencies = (rendered, seconds = 30) => ({
+const dependencies = (rendered, seconds = 30, covers = []) => ({
   generateSinglePostScript: async () => script,
   planBeats: async () => [
     {
@@ -205,14 +205,20 @@ const dependencies = (rendered, seconds = 30) => ({
   getQiniuConfig: () => ({ keyPrefix: "test" }),
   embedLocalAudioAsDataUrls: async (props) => props,
   renderToPath: async (_root, props) => rendered.push(props),
-  uploadFileToQiniu: async () => "https://cdn.example.com/reel.mp4",
+  renderCoverToPath: async (_root, props) => covers.push(props),
+  uploadFileToQiniu: async (file) => file.endsWith(".png")
+    ? "https://cdn.example.com/cover.png"
+    : "https://cdn.example.com/reel.mp4",
 });
 
 test("worker selects English HostExplainer, retimes beats after TTS, returns script and duration", async (t) => {
   const root = await temporary(t);
   const job = await createQueuedJob(root, input());
   const rendered = [];
-  await runOneJob(root, job.job_id, dependencies(rendered));
+  const covers = [];
+  await runOneJob(root, job.job_id, dependencies(rendered, 30, covers));
+  assert.deepEqual(covers, rendered);
+  assert.equal(covers.length, 1);
   const result = await readJob(root, job.job_id);
   assert.equal(result.status, "done", result.error);
   assert.equal(rendered.length, 1);
@@ -224,6 +230,8 @@ test("worker selects English HostExplainer, retimes beats after TTS, returns scr
   assert.equal(rendered[0].closingSubtitle, script.closing);
   const callback = buildCallbackPayload(result);
   assert.equal(callback.client_ref, "content-video:123");
+  assert.equal(callback.cover_url, "https://cdn.example.com/cover.png");
+  assert.equal(publicJobView(result).cover_url, callback.cover_url);
   assert.equal(callback.script.cases[0].narration, script.cases[0].narration);
   assert.equal(callback.duration_seconds, 30);
   assert.equal(

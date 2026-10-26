@@ -64,7 +64,8 @@ export const uploadFileToQiniu = async (localPath, key) => {
   const form = new FormData();
   form.append("token", token);
   form.append("key", key);
-  form.append("file", new Blob([bytes], { type: "video/mp4" }), key);
+  const mime = /\.png$/i.test(localPath) ? "image/png" : "video/mp4";
+  form.append("file", new Blob([bytes], { type: mime }), key);
 
   const response = await fetch("https://upload.qiniup.com", {
     method: "POST",

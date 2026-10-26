@@ -107,7 +107,7 @@ Create body:
 }
 ```
 
-`options.locale`: `"zh"`（默认）或 `"en"`。英文视频请传 `locale: "en"` 与英文音色（如 `en-US-JennyNeural`）；Markdown 可用 `Author`/`Date`/`Metric`/`## Takeaway`。
+`options.locale`: `"zh"`（默认）或 `"en"`。英文视频请传 `locale: "en"`，默认使用英文男声 Guy（`en-US-GuyNeural`），也可通过 `options.voice` 指定其他英文音色；Markdown 可用 `Author`/`Date`/`Metric`/`## Takeaway`。
 
 `options.aspect`: `"portrait"`（默认 9:16）或 `"landscape"`（16:9）。未传 `aspects` 时默认只渲竖屏。
 
@@ -247,4 +247,6 @@ The worker generates a dedicated English hook, one-case narration and a takeaway
 
 Use a stable, unique `client_ref` for every local video job. Single-post retries with the same `client_ref`, post and options return the existing persistent job; concurrent same-process creates are serialized. Reusing a reference for different input returns HTTP 409. Intentional regeneration uses a new reference. The service runs as one process with one worker queue. On restart it requeues persisted nonterminal jobs and suppresses duplicate same-process enqueue attempts; interrupted work may repeat external generation steps.
 
-Callbacks and `GET /api/v1/render-jobs/:id` include `script` (`title`, `intro`, `cases: [{index, narration}]`, `closing`, `source`) and `duration_seconds`, in addition to existing job/status/progress/video fields. Failed jobs may include the generated script and measured audio duration. The usual LLM, Azure Speech and Qiniu configuration is required.
+Single-post videos open with a fully visible cover for the hook narration: an English title, the first source image (or a large key-point statement when no image is selected), presenter and source attribution. The cover does not fade in from an empty frame or add time to the existing audio. The worker exports the same composition at frame zero as a PNG, uploads it alongside the MP4, and exposes its `cover_url` in callbacks and authenticated job lookups. VidFlow uses this URL as the player poster and offers a separate cover download. Existing videos need regeneration to gain the new cover.
+
+Callbacks and `GET /api/v1/render-jobs/:id` include `script` (`title`, `intro`, `cases: [{index, narration}]`, `closing`, `source`), `duration_seconds` and nullable `cover_url`, in addition to existing job/status/progress/video fields. Failed jobs may include the generated script and measured audio duration. The usual LLM, Azure Speech and Qiniu configuration is required.

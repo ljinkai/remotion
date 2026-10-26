@@ -345,7 +345,7 @@ function App() {
         setVoicesSource(body.source || "");
         const defaultVoice =
           body.defaultVoice ||
-          (weeklyLocale === "en" ? "en-US-JennyNeural" : "zh-CN-YunxiNeural");
+          (weeklyLocale === "en" ? "en-US-GuyNeural" : "zh-CN-YunxiNeural");
         const currentOk = (body.voices || []).some(
           (item) => item.id === voiceId,
         );
@@ -448,7 +448,7 @@ function App() {
     if (isEn === currentIsEn) {
       return;
     }
-    const preferred = isEn ? "en-US-JennyNeural" : "zh-CN-YunxiNeural";
+    const preferred = isEn ? "en-US-GuyNeural" : "zh-CN-YunxiNeural";
     const match = voices.find((item) => item.id === preferred);
     const fallback = voices.find((item) =>
       isEn ? /^en[-_]/i.test(item.id) : /^zh[-_]/i.test(item.id),
