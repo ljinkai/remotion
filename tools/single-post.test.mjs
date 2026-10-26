@@ -327,3 +327,114 @@ test("all selected images appear even when one sentence has eight images, withou
   const single = [{ images: [images[0]] }];
   assert.deepEqual(postGalleryElements(beat, [beat], single, 4000), beat.elements);
 });
+
+// Local fixtures only: these tests never contact a model service.
+const mockScriptResponses = (t, responses) => {
+  const originalFetch = globalThis.fetch;
+  const originalKey = process.env.SCRIPT_LLM_API_KEY;
+  process.env.SCRIPT_LLM_API_KEY = "test-only";
+  const requests = [];
+  globalThis.fetch = async (_url, options) => {
+    requests.push(JSON.parse(options.body));
+    const fixture = responses[Math.min(requests.length - 1, responses.length - 1)];
+    if (fixture instanceof Error) throw fixture;
+    return {
+      ok: !fixture.status,
+      status: fixture.status || 200,
+      json: async () => ({ choices: [{
+        finish_reason: fixture.finish_reason || "stop",
+        message: { content: fixture.raw ?? JSON.stringify(fixture.payload) },
+      }] }),
+    };
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+    if (originalKey === undefined) delete process.env.SCRIPT_LLM_API_KEY;
+    else process.env.SCRIPT_LLM_API_KEY = originalKey;
+  });
+  return requests;
+};
+
+test("single-post accepts fenced or explained JSON without an extra model call", async (t) => {
+  const requests = mockScriptResponses(t, [
+    { raw: `Here is the JSON script:\n\`\`\`json\n${JSON.stringify(script)}\n\`\`\`\nReady to use.` },
+    { raw: `\`\`\`json\n${JSON.stringify(script)}\n\`\`\`` },
+  ]);
+  for (let i = 0; i < 2; i += 1)
+    assert.deepEqual(await generateSinglePostScript(post, 45), script);
+  assert.equal(requests.length, 2);
+  assert.deepEqual(requests[0].response_format, { type: "json_object" });
+  assert.equal(requests[0].max_tokens, undefined, "no artificial token cap for structured output");
+});
+
+test("single-post normalizes one case object, narration lines and the existing text alias", async (t) => {
+  const requests = mockScriptResponses(t, [
+    { payload: { ...script, cases: { narration: ["The maker reports 12 users.", "It is a focused product."] } } },
+    { payload: { ...script, cases: [{ text: script.cases[0].narration }] } },
+  ]);
+  assert.equal((await generateSinglePostScript(post, 45)).cases[0].narration,
+    "The maker reports 12 users.\nIt is a focused product.");
+  assert.deepEqual(await generateSinglePostScript(post, 45), script);
+  assert.equal(requests.length, 2);
+});
+
+test("missing fields trigger one targeted correction rather than using the Chinese source title", async (t) => {
+  const requests = mockScriptResponses(t, [
+    { payload: { intro: script.intro, cases: script.cases } }, { payload: script },
+  ]);
+  assert.deepEqual(await generateSinglePostScript(post, 45), script);
+  assert.equal(requests.length, 2);
+  const correction = requests[1].messages.at(-1).content;
+  assert.match(correction, /title.*缺失/);
+  assert.match(correction, /closing.*缺失/);
+  assert.match(correction, /exactly ONE/);
+  assert.match(correction, /original SOURCE DATA/);
+  assert.match(correction, /editor opinion/);
+  assert.deepEqual(requests[1].response_format, { type: "json_object" });
+  assert.equal(requests[1].max_tokens, undefined);
+});
+
+test("invalid JSON can be corrected; repeated failure identifies the invalid field", async (t) => {
+  const requests = mockScriptResponses(t, [
+    { raw: '{"title":' }, { payload: script },
+    { payload: {} }, { payload: { ...script, closing: [] } },
+  ]);
+  assert.deepEqual(await generateSinglePostScript(post, 45), script);
+  await assert.rejects(generateSinglePostScript(post, 45), /已自动修复 1 次.*closing.*缺失/);
+  assert.equal(requests.length, 4);
+});
+
+test("non-English, multi-case and malformed narration cannot bypass validation", async (t) => {
+  const fixtures = [
+    [{ ...script, title: "一个新产品" }, /title 必须为英文/],
+    [{ ...script, closing: "See you next week." }, /closing 含周刊文案/],
+    [{ ...script, cases: [...script.cases, ...script.cases] }, /cases.*实际为 2 条/],
+    [{ ...script, cases: [{ narration: ["An English line.", { text: "hidden" }] }] }, /narration.*格式错误/],
+    [[script], /必须是 JSON 对象/],
+  ];
+  const responses = fixtures.flatMap(([payload]) => [{ payload }, { payload }]);
+  const requests = mockScriptResponses(t, responses);
+  for (const [, expected] of fixtures)
+    await assert.rejects(generateSinglePostScript(post, 45), expected);
+  assert.equal(requests.length, 10, "each invalid draft gets exactly one correction");
+});
+
+test("truncation is corrected once even for parseable JSON and explicitly reported if repeated", async (t) => {
+  const requests = mockScriptResponses(t, [
+    { payload: script, finish_reason: "length" }, { payload: script },
+    { raw: '{"title":', finish_reason: "length" },
+    { raw: '{"title":', finish_reason: "length" },
+  ]);
+  assert.deepEqual(await generateSinglePostScript(post, 45), script);
+  assert.match(requests[1].messages.at(-1).content, /截断/);
+  await assert.rejects(generateSinglePostScript(post, 45), /token 上限被截断/);
+  assert.equal(requests.length, 4);
+});
+
+test("HTTP and network failures do not trigger a paid retry", async (t) => {
+  const requests = mockScriptResponses(t, [{ status: 429 }, new Error("network unavailable")]);
+  await assert.rejects(generateSinglePostScript(post, 45), /HTTP 429/);
+  assert.equal(requests.length, 1);
+  await assert.rejects(generateSinglePostScript(post, 45), /network unavailable/);
+  assert.equal(requests.length, 2);
+});
