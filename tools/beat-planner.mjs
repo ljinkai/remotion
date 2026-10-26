@@ -27,10 +27,18 @@ const caseContext = (props) =>
     title: item.title || "",
     metric: item.metric || "",
     image: item.image || "",
+    allowedImages: [
+      ...new Set(
+        [item.image, ...(Array.isArray(item.images) ? item.images : [])].filter(
+          Boolean,
+        ),
+      ),
+    ],
     author: item.author || "",
     sourceBody: item.sourceBody || "",
     reviewedImageEvidence: Array.isArray(props.hostEvidence)
-      ? props.hostEvidence.find((profile) => profile.image === item.image) || null
+      ? props.hostEvidence.find((profile) => profile.image === item.image) ||
+        null
       : null,
   }));
 
@@ -49,7 +57,7 @@ export const buildBeatPrompt = (script, props) => {
 - 每条提供 scene：product（产品展示）、metric（真实指标）、steps（真实操作步骤）、statement（能力或结论）、relationship（真实关系或策略聚焦）。选择应来自句子的叙事作用，不能只看“自动”“应用”等单个词就画手机。
 - 使用一个主要内容元素，可加辅助文字或图形，总计1到4个元素。元素可用 text、card、image、bar、phone、icon、svg、chart、relationship、explanation，不添加未定义字段。
 - 同一案例的第一行，只要案例有 image，必须展示该案例给定的 image，不要求口播出现“截图”。若首句已是明确指标，保留 metric 主视觉并配 image 辅助；否则使用 product；每个有图片的案例至少一条展示图片。其他场景也可保留图片作辅助，不要丢掉原素材。
-- image.src 只能使用当前 caseIndex 的 image，禁止跨案例借图、猜测网址。intro/closing没有案例归属，不附案例图片。
+- image.src 只能使用当前 caseIndex 的 allowedImages（没有时使用 image），禁止跨案例借图、猜测网址。同一单帖可在后续分镜选择其他给定图片，第一句仍展示首张 image。intro/closing没有案例归属，不附案例图片。
 - product：已有图片作为主视觉，配摘自原文的简短产品定位。保留产品图片本身，不以虚构界面代替。
 - metric：仅当句子或当前案例 metric 有明确数字及单位时使用。用 xl text 完整展示原数字、币种/单位/统计口径。没有已给出的参照范围，不生成 bar.max；没有真实时间序列，不生成 card.bars。不要把单个收入数字编成增长趋势或对比数据。
 - chart：{type:"chart",chartType:"single|comparison|milestones",title:"原指标标题",unit:"原单位或MRR/ARR口径",data:[{label:"原文实体或阶段",value:真实值,display:"保留倍率单位和+下界的原显示值",note:"可选原文说明"}],source:"原文来源"}。single只有一个真实值；comparison每个标签和值必须在同一原文分句，且原文明示对比；milestones须有真实阶段及对应数据，不能编日期。MRR和ARR严格分开。没有已知总量不画比例，本轮不输出proportion。
@@ -73,25 +81,28 @@ ${JSON.stringify(caseContext(props), null, 2)}`;
 };
 
 const callPlanner = async (config, prompt) => {
-  const response = await globalThis.fetch(`${config.baseUrl}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${config.apiKey}`,
+  const response = await globalThis.fetch(
+    `${config.baseUrl}/chat/completions`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${config.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: config.model,
+        temperature: 0.4,
+        messages: [
+          {
+            role: "system",
+            content:
+              "你为口播视频写分镜 JSON。只输出一个 JSON 对象，不要 Markdown。不要编造数字或图片地址。",
+          },
+          { role: "user", content: prompt },
+        ],
+      }),
     },
-    body: JSON.stringify({
-      model: config.model,
-      temperature: 0.4,
-      messages: [
-        {
-          role: "system",
-          content:
-            "你为口播视频写分镜 JSON。只输出一个 JSON 对象，不要 Markdown。不要编造数字或图片地址。",
-        },
-        { role: "user", content: prompt },
-      ],
-    }),
-  });
+  );
   const bodyText = await response.text();
   let body;
   try {

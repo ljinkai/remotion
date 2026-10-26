@@ -62,13 +62,12 @@ export const narrationLines = (script) => {
   return lines;
 };
 
+const caseImageSrcs = (item) => [item?.image, ...(Array.isArray(item?.images) ? item.images : [])].filter((src) => typeof src === "string" && src.trim()).map((src) => src.trim());
+
 export const allowedImageSrcs = (props) => {
   const srcs = new Set();
   for (const item of props?.cases || []) {
-    const src = String(item?.image || "").trim();
-    if (src) {
-      srcs.add(src);
-    }
+    for (const src of caseImageSrcs(item)) srcs.add(src);
   }
   return srcs;
 };
@@ -347,7 +346,7 @@ const enrichEvidenceVisuals = (beat, original, caseItem, profile, caseNarration,
   const elements = beat.elements.map((element) => {
     if (element.type !== "image") return element;
     const authored = rawElements.find((raw) => raw?.type === "image" && raw.src === element.src);
-    const focus = profile?.focus || normalizeFocus(authored?.focus);
+    const focus = (element.src === image ? profile?.focus : null) || normalizeFocus(authored?.focus);
     return { ...element, ...(focus ? { focus } : {}) };
   });
   if ((chart || relationship) && image && !elements.some((element) => element.type === "image")) elements.unshift({ type: "image", src: image, ...(profile?.focus ? { focus: profile.focus } : {}), ...(caseItem?.title ? { caption: cleanText(caseItem.title, 24) } : {}) });
@@ -395,6 +394,7 @@ const hasUnsupportedNumber = (text, evidence) => {
 /** Enrich legacy cache rows without mutating cache, changing narration, or requiring regeneration. */
 export const enrichBeatScenes = (beats, props) => {
   const firstCases = new Set();
+  const caseLineCounts = new Map();
   const caseNarrations = new Map();
   for (const beat of beats) {
     if (Number.isInteger(beat.caseIndex)) caseNarrations.set(beat.caseIndex, `${caseNarrations.get(beat.caseIndex) || ""}\n${beat.say || ""}`);
@@ -410,7 +410,7 @@ export const enrichBeatScenes = (beats, props) => {
     const metrics = sourceMetrics(beat.say).length ? sourceMetrics(beat.say)
       : beat.scene === "metric" ? supportedMetrics : [];
     const steps = stepPhrases(beat.say || "");
-    const images = new Set(image ? [image] : []);
+    const images = new Set(caseImageSrcs(caseItem));
     const elements = (Array.isArray(beat.elements) ? beat.elements : []).flatMap((raw) => {
       if (raw?.type === "explanation") return [raw];
       const element = normalizeElement(raw, images);
@@ -433,6 +433,19 @@ export const enrichBeatScenes = (beats, props) => {
     });
     if (firstCaseLine && image && !elements.some((item) => item.type === "image" && item.src === image)) {
       elements.unshift({ type: "image", src: image, ...(caseItem.title ? { caption: cleanText(caseItem.title, 24) } : {}) });
+    }
+    // A single post can have several candidate images. Give later narration
+    // lines a deterministic alternate instead of relying on the planner to pick it.
+    if (props?.contentMode === "single_post" && caseIndex !== null) {
+      const sources = [...new Set(caseImageSrcs(caseItem))];
+      const lineIndex = caseLineCounts.get(caseIndex) || 0;
+      caseLineCounts.set(caseIndex, lineIndex + 1);
+      const selected = sources[lineIndex % sources.length];
+      if (selected && !elements.some((element) => element.type === "image" && element.src === selected)) {
+        const existing = elements.findIndex((element) => element.type === "image");
+        if (existing >= 0) elements.splice(existing, 1);
+        elements.unshift({ type: "image", src: selected, caption: cleanText(caseItem.title, 24) });
+      }
     }
     // Keep valid case images even when the model supplied four decorative elements first.
     const prioritized = [...elements.filter((item) => item.type === "image"), ...elements.filter((item) => item.type === "explanation"), ...elements.filter((item) => item.type !== "image" && item.type !== "explanation")].slice(0, 4);

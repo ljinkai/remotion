@@ -71,9 +71,13 @@ export type HostBeat = {
 export type HostCaseRef = {
   index?: string;
   title?: string;
+  images?: string[];
 };
 
 export type HostExplainerProps = {
+  contentMode?: "single_post";
+  sourceUrl?: string;
+  sourceAuthor?: string;
   locale?: "zh" | "en";
   beats?: HostBeat[];
   cases?: HostCaseRef[];

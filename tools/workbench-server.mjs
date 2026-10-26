@@ -1,3 +1,4 @@
+import { normalizeSinglePost } from "./single-post.mjs";
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
 import { createReadStream } from "node:fs";
@@ -18,10 +19,17 @@ import {
 } from "./azure-voices.mjs";
 import { compositionIdForProps } from "./beat-spec.mjs";
 import { planBeats } from "./beat-planner.mjs";
-import { loadHostEvidence, withVerifiedHostEvidence } from "./host-evidence.mjs";
-import { enqueueRenderJob } from "./render-job-worker.mjs";
+import {
+  loadHostEvidence,
+  withVerifiedHostEvidence,
+} from "./host-evidence.mjs";
+import { enqueueRenderJob, recoverRenderJobs } from "./render-job-worker.mjs";
 import { normalizeRenderJobOptions } from "./render-job-options.mjs";
-import { createQueuedJob, publicJobView, readJob } from "./render-job-store.mjs";
+import {
+  createOrReuseQueuedJob,
+  publicJobView,
+  readJob,
+} from "./render-job-store.mjs";
 import {
   listRecentWeeklyIssues,
   loadWeeklyIssueMarkdown,
@@ -782,8 +790,7 @@ const server = createServer(async (req, res) => {
         } catch {
           // curated fallback when Azure env is missing
         }
-        const locale =
-          url.searchParams.get("locale") === "en" ? "en" : "zh";
+        const locale = url.searchParams.get("locale") === "en" ? "en" : "zh";
         const result = await listChineseVoices({ ...credentials, locale });
         sendJson(res, 200, {
           locale,
@@ -805,10 +812,7 @@ const server = createServer(async (req, res) => {
     if (req.method === "POST" && pathname === "/api/voice-preview") {
       const body = await readJson(req);
       const locale = body.locale === "en" ? "en" : "zh";
-      const voice = resolveVoiceId(
-        body.voice,
-        defaultVoiceForLocale(locale),
-      );
+      const voice = resolveVoiceId(body.voice, defaultVoiceForLocale(locale));
       const text =
         typeof body.text === "string" && body.text.trim()
           ? body.text.trim().slice(0, 120)
@@ -871,7 +875,10 @@ const server = createServer(async (req, res) => {
         sendJson(res, 400, { error: "缺少 props" });
         return;
       }
-      const beats = await planBeats(body.script, await withVerifiedHostEvidence(body.props, root));
+      const beats = await planBeats(
+        body.script,
+        await withVerifiedHostEvidence(body.props, root),
+      );
       sendJson(res, 200, { beats });
       return;
     }
@@ -883,10 +890,7 @@ const server = createServer(async (req, res) => {
         return;
       }
       const locale = body.locale === "en" ? "en" : "zh";
-      const voice = resolveVoiceId(
-        body.voice,
-        defaultVoiceForLocale(locale),
-      );
+      const voice = resolveVoiceId(body.voice, defaultVoiceForLocale(locale));
       const result = await synthesizeVideoProps(body.props, { root, voice });
       sendJson(res, 200, result);
       return;
@@ -894,7 +898,9 @@ const server = createServer(async (req, res) => {
 
     if (req.method === "POST" && pathname === "/api/render") {
       const body = await readJson(req);
-      const result = await renderVideo(await withVerifiedHostEvidence(body.props, root));
+      const result = await renderVideo(
+        await withVerifiedHostEvidence(body.props, root),
+      );
       sendJson(res, 200, result);
       return;
     }
@@ -918,7 +924,7 @@ const server = createServer(async (req, res) => {
         typeof body.markdown === "string" ? body.markdown.trim() : "";
       const callbackUrl =
         typeof body.callback_url === "string" ? body.callback_url.trim() : "";
-      if (!markdown) {
+      if (!markdown && body.content_mode !== "single_post") {
         sendJson(res, 400, { error: "markdown 必填" });
         return;
       }
@@ -933,16 +939,43 @@ const server = createServer(async (req, res) => {
         sendJson(res, 400, { error: "callback_url 非法" });
         return;
       }
-      const job = await createQueuedJob(root, {
-        markdown,
-        client_ref:
-          body.client_ref === undefined || body.client_ref === null
-            ? null
-            : String(body.client_ref),
-        callback_url: callbackUrl,
-        options: normalizeRenderJobOptions(body.options),
-      });
-      enqueueRenderJob(root, job.job_id);
+      let singlePost = null;
+      if (
+        body.content_mode &&
+        !["weekly", "single_post"].includes(body.content_mode)
+      ) {
+        sendJson(res, 400, { error: "content_mode 非法" });
+        return;
+      }
+      if (body.content_mode === "single_post") {
+        try {
+          singlePost = normalizeSinglePost(body.post, body.options);
+        } catch (error) {
+          sendJson(res, 400, { error: error.message });
+          return;
+        }
+      }
+      let result;
+      try {
+        result = await createOrReuseQueuedJob(root, {
+          markdown,
+          content_mode: body.content_mode || "weekly",
+          post: singlePost?.post || null,
+          client_ref:
+            body.client_ref === undefined || body.client_ref === null
+              ? null
+              : String(body.client_ref),
+          callback_url: callbackUrl,
+          options: normalizeRenderJobOptions(
+            singlePost?.options || body.options,
+          ),
+        });
+      } catch (error) {
+        sendJson(res, 409, { error: error.message });
+        return;
+      }
+      const { job, created } = result;
+      if (created) enqueueRenderJob(root, job.job_id);
       sendJson(res, 202, {
         job_id: job.job_id,
         status: job.status,
@@ -977,6 +1010,8 @@ const server = createServer(async (req, res) => {
     });
   }
 });
+
+await recoverRenderJobs(root);
 
 server.listen(port, host, () => {
   console.log(`Markdown video workbench: http://${host}:${port}`);

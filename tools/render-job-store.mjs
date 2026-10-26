@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 
@@ -50,7 +50,9 @@ export const readJob = async (root, jobId) => {
 export const writeJob = async (root, job) => {
   const dir = jobDir(root, job.job_id);
   await mkdir(dir, { recursive: true });
-  await writeFile(jobPath(root, job.job_id), JSON.stringify(job, null, 2), "utf8");
+  const temporaryPath = path.join(dir, `job-${randomUUID()}.tmp`);
+  await writeFile(temporaryPath, JSON.stringify(job, null, 2), "utf8");
+  await rename(temporaryPath, jobPath(root, job.job_id));
   return job;
 };
 
@@ -76,7 +78,14 @@ export const updateJob = async (root, jobId, patch) => {
 
 export const createQueuedJob = async (
   root,
-  { markdown, client_ref, callback_url, options },
+  {
+    markdown = "",
+    content_mode = "weekly",
+    post = null,
+    client_ref,
+    callback_url,
+    options,
+  },
 ) => {
   const job_id = createJobId();
   const created_at = nowIso();
@@ -85,6 +94,8 @@ export const createQueuedJob = async (
     client_ref: client_ref ?? null,
     callback_url,
     markdown,
+    content_mode,
+    post,
     options: options || {},
     status: "queued",
     progress: 0,
@@ -99,7 +110,11 @@ export const createQueuedJob = async (
     finished_at: null,
   };
   await writeJob(root, job);
-  await writeFile(path.join(jobDir(root, job_id), "input.md"), markdown, "utf8");
+  await writeFile(
+    path.join(jobDir(root, job_id), "input.md"),
+    markdown,
+    "utf8",
+  );
   return job;
 };
 
@@ -111,6 +126,8 @@ export const publicJobView = (job) => ({
   aspect: job.options?.aspect || "portrait",
   video_url: job.video_url ?? null,
   script: job.script ?? null,
+  duration_seconds: job.duration_seconds ?? null,
+  content_mode: job.content_mode || "weekly",
   error: job.error ?? null,
   callback_status: job.callback_status ?? null,
   created_at: job.created_at,
@@ -119,3 +136,62 @@ export const publicJobView = (job) => ({
 });
 
 export const isActiveStatus = (status) => ACTIVE_STATUSES.has(status);
+
+// Serialize same-process creates, then consult persisted jobs so HTTP retries and
+// VidFlow restarts keep the original paid render. The service has one worker process.
+const creationLocks = new Map();
+export const createOrReuseQueuedJob = async (root, input) => {
+  if (input.content_mode !== "single_post" || !input.client_ref) {
+    return { job: await createQueuedJob(root, input), created: true };
+  }
+  const key = JSON.stringify([root, input.client_ref]);
+  const previous = creationLocks.get(key) || Promise.resolve();
+  const current = previous
+    .catch(() => {})
+    .then(async () => {
+      let entries = [];
+      try {
+        entries = await readdir(jobsRoot(root));
+      } catch (error) {
+        if (error.code !== "ENOENT") throw error;
+      }
+      for (const id of entries) {
+        const existing = await readJob(root, id);
+        if (
+          existing?.content_mode === "single_post" &&
+          existing.client_ref === input.client_ref
+        ) {
+          if (
+            JSON.stringify(existing.post) !== JSON.stringify(input.post) ||
+            JSON.stringify(existing.options) !== JSON.stringify(input.options)
+          ) {
+            throw new Error(
+              "client_ref already exists with different content or options",
+            );
+          }
+          return { job: existing, created: false };
+        }
+      }
+      return { job: await createQueuedJob(root, input), created: true };
+    });
+  creationLocks.set(key, current);
+  try {
+    return await current;
+  } finally {
+    if (creationLocks.get(key) === current) creationLocks.delete(key);
+  }
+};
+
+export const activeJobIds = async (root) => {
+  let ids;
+  try {
+    ids = await readdir(jobsRoot(root));
+  } catch (error) {
+    if (error.code === "ENOENT") return [];
+    throw error;
+  }
+  const jobs = await Promise.all(ids.map((id) => readJob(root, id)));
+  return jobs
+    .filter((job) => job && isActiveStatus(job.status))
+    .map((job) => job.job_id);
+};

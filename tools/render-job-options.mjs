@@ -34,8 +34,7 @@ export const normalizeRenderJobOptions = (raw = {}) => {
         ? source.templateId.trim()
         : "";
 
-  const voice =
-    typeof source.voice === "string" ? source.voice.trim() : "";
+  const voice = typeof source.voice === "string" ? source.voice.trim() : "";
 
   const localeRaw = String(source.locale || "")
     .trim()
@@ -47,6 +46,9 @@ export const normalizeRenderJobOptions = (raw = {}) => {
     aspect,
     aspects,
     locale,
+    ...(source.target_duration_seconds !== undefined
+      ? { target_duration_seconds: source.target_duration_seconds }
+      : {}),
     ...(templateId ? { template_id: templateId, templateId } : {}),
     ...(voice ? { voice } : {}),
   };

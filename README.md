@@ -214,3 +214,37 @@ Images can be files under `public/` such as `case-images/example.png`, or remote
 选择 Workbench 的 EN 后，英文内容使用对应的逐字稿与音色入口，并按英文来源提取流程、功能、明确对比和独立指标。人物内置章节、原图状态和图表提示随 locale 切换；原始图片与作者来源文字保持原样。没有真实分镜时的英文样例仅用于预览。
 
 英文长标题和字幕保持完整术语与数字，人物大小和黄色字幕样式与中文一致。实现及验证范围见 `docs/technical/english-host-adaptation.md`；嘴型仍是程序节奏动画，不是音素级口型同步。
+
+### Single-post English presenter Reel
+
+`POST /api/v1/render-jobs` also accepts one content item, independent of a weekly issue:
+
+```json
+{
+  "content_mode": "single_post",
+  "client_ref": "content-video:<vidflow-job-id>",
+  "callback_url": "https://vidflow.example/api/hooks/remotion/content-video-jobs",
+  "post": {
+    "title": "Original post title",
+    "body": "Original post text in any language",
+    "commentary": "Optional editor opinion",
+    "source_url": "https://example.com/original-post",
+    "author": "Original author",
+    "images": ["https://example.com/source-image.png"]
+  },
+  "options": {
+    "locale": "en",
+    "template_id": "host",
+    "aspects": ["portrait"],
+    "target_duration_seconds": 45
+  }
+}
+```
+
+Single-post mode defaults to English, the `host` presenter and portrait 1080×1920 output. Target duration is an integer between 15 and 90 seconds (default 45); it is a writing budget. If actual synthesized audio exceeds 125% of the target, the job fails before rendering/uploading with an actionable error. No automatic paid regeneration runs. Images may be omitted (`[]`) or include up to eight selected source images. The first case scene shows the first image; later scenes may select other images from the same post. Source attribution appears on screen, and presenter content is inset for Reel interface space.
+
+The worker generates a dedicated English hook, one-case narration and a takeaway, plans host scenes, then aligns those scenes to synthesized audio. It does not use weekly intros, newsletter tickers or next-week CTAs. Original facts and editor opinions are supplied separately to the writer. Existing Markdown weekly requests remain supported.
+
+Use a stable, unique `client_ref` for every local video job. Single-post retries with the same `client_ref`, post and options return the existing persistent job; concurrent same-process creates are serialized. Reusing a reference for different input returns HTTP 409. Intentional regeneration uses a new reference. The service runs as one process with one worker queue. On restart it requeues persisted nonterminal jobs and suppresses duplicate same-process enqueue attempts; interrupted work may repeat external generation steps.
+
+Callbacks and `GET /api/v1/render-jobs/:id` include `script` (`title`, `intro`, `cases: [{index, narration}]`, `closing`, `source`) and `duration_seconds`, in addition to existing job/status/progress/video fields. Failed jobs may include the generated script and measured audio duration. The usual LLM, Azure Speech and Qiniu configuration is required.

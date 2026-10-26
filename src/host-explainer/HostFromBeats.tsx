@@ -11,6 +11,7 @@ import { continuousSceneWindow } from "./richSceneMath";
 import { HostLocaleProvider, hostLabels, type HostLocale } from "./hostLocale";
 import { hostCaptionPages, hostCaptionPageAtFrame } from "./hostCaptions";
 import { HostCaptions } from "./HostCaptionArea";
+import { postGalleryElements } from "./postGallery";
 
 const checklistEntries = (titles: string[], active: number | null) => {
   if (titles.length <= 4) {
@@ -87,7 +88,11 @@ export const HostExplainer: React.FC<HostExplainerProps> = ({
   cases = [],
   narrationAudioSrc,
   locale = "zh",
+  contentMode,
+  sourceUrl,
+  sourceAuthor,
 }) => {
+  const singlePost = contentMode === "single_post";
   const labels = hostLabels[locale];
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -116,8 +121,11 @@ export const HostExplainer: React.FC<HostExplainerProps> = ({
 
   const index = activeBeat(beats, frame, fps);
   const beat = beats[index];
+  const elements = singlePost
+    ? postGalleryElements(beat, beats, cases, (frame / fps) * 1000)
+    : beat.elements;
   const rich = ["product", "metric", "relationship"].includes(
-    deriveHostScene(beat.elements, beat.scene),
+    deriveHostScene(elements, beat.scene),
   );
   const sceneWindow = continuousSceneWindow(beats, index, frame, fps);
   const startFrame = Math.round((beat.startMs / 1000) * fps);
@@ -142,11 +150,18 @@ export const HostExplainer: React.FC<HostExplainerProps> = ({
 
   return (
     <HostLocaleProvider value={locale}>
+      <AbsoluteFill style={{ backgroundColor: theme.paper }} />
       <AbsoluteFill
         style={{
           backgroundColor: theme.paper,
           color: theme.ink,
           fontFamily: theme.font,
+          ...(singlePost
+            ? {
+                transform: "translateY(-40px) scale(0.86)",
+                transformOrigin: "center",
+              }
+            : {}),
         }}
       >
         {narrationAudioSrc ? (
@@ -198,9 +213,27 @@ export const HostExplainer: React.FC<HostExplainerProps> = ({
             duration={durationFrames}
           />
         </div>
+        {singlePost && sourceUrl ? (
+          <div
+            style={{
+              position: "absolute",
+              top: 124,
+              left: 64,
+              width: 850,
+              fontSize: 23,
+              color: theme.muted,
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+          >
+            Source: {sourceAuthor ? `${sourceAuthor} · ` : ""}
+            {sourceUrl}
+          </div>
+        ) : null}
         <ElementStage
           narration={beat.say}
-          elements={beat.elements}
+          elements={elements}
           scene={beat.scene}
           localFrame={localFrame}
           durationFrames={durationFrames}
@@ -210,7 +243,7 @@ export const HostExplainer: React.FC<HostExplainerProps> = ({
         />
         <Checklist
           compact={rich}
-          title={`// ${labels.cases}`}
+          title={`// ${singlePost ? "Featured post" : labels.cases}`}
           activeIndex={beat.section === "case" ? beat.caseIndex : null}
           progress={progress}
           entries={checklistEntries(
