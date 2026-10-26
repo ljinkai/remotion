@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import process from "node:process";
 import test from "node:test";
 import {
   assignBeatTiming,
@@ -312,11 +313,45 @@ test("malformed model JSON retries then returns deterministic source-backed scen
   let requests = 0;
   context.mock.method(globalThis, "fetch", async () => {
     requests++;
-    return new Response(JSON.stringify({ choices: [{ message: { content: "malformed output" } }] }), { status: 200 });
+    return new globalThis.Response(JSON.stringify({ choices: [{ message: { content: "malformed output" } }] }), { status: 200 });
   });
   const result = await planBeats({ cases: [{ narration: "介绍产品" }] }, { cases: [{ image: "source.png" }] });
   assert.equal(requests, 2);
   assert.equal(result[0].scene, "product");
   assert.equal(result[0].say, "介绍产品");
   assert.equal(result[0].elements[0].src, "source.png");
+});
+
+test("English numbers preserve count units, revenue periods and exact source magnitudes", () => {
+  for (const [say, token, value] of [
+    ["The tool has 234 paying customers.", "234 paying customers", 234],
+    ["We reached 15,000 registered users.", "15,000 registered users", 15000],
+    ["Monthly revenue is $3,700.", "$3,700", 3700],
+    ["MRR of $5k is disclosed.", "MRR of $5k", 5000],
+    ["Revenue reached $4M ARR.", "$4M ARR", 4000000],
+    ["The service has 1.5 million users.", "1.5 million users", 1500000],
+    ["Customers: 234", "Customers: 234", 234],
+  ]) {
+    const [beat] = validateBeats([], { intro: say }, { locale: "en", cases: [] });
+    assert.equal(beat.scene, "metric", say);
+    const chart = beat.elements.find((element) => element.type === "chart");
+    assert.equal(chart.chartType, "single");
+    assert.equal(chart.data[0].value, value);
+    assert.equal(chart.data[0].display, token);
+    assert.equal(/[\u3400-\u9fff]/.test(`${chart.data[0].label} ${chart.source} ${chart.unit}`), false);
+  }
+  const [negative] = validateBeats([], { intro: "There are no 100 paying customers." }, { locale: "en", cases: [] });
+  assert.equal(negative.elements.some((element) => element.type === "chart"), false);
+});
+
+test("English headlines end on complete source words and planner asks for English display fields", () => {
+  const say = "An exceptionally useful independent developer tool makes the entire publishing workflow easier to understand and operate";
+  const [beat] = validateBeats([], { intro: say }, { locale: "en", cases: [] });
+  assert.ok(beat.headline.length > 18);
+  assert.ok(say.startsWith(beat.headline));
+  assert.ok(say[beat.headline.length] === " " || beat.headline.length === say.length);
+  const prompt = buildBeatPrompt({ intro: say }, { locale: "en", cases: [] });
+  assert.match(prompt, /LANGUAGE: English/);
+  assert.match(prompt, /whole-word boundary/);
+  assert.match(prompt, /Do not translate English narration/);
 });

@@ -93,3 +93,20 @@ test("existing cached case beats gain scenes and original images without changin
   assert.equal(result.previewProps.beats[0].say, legacy[0].say);
   assert.equal(JSON.stringify(cache), before);
 });
+
+test("English locale survives own-beat preview/export and preview-only fallback without swapping content", () => {
+  const own = [{ say: "First import notes, then export the report.", headline: "Import and export", section: "intro", caseIndex: null, elements: [] }];
+  const props = { locale: "en", narrationAudioSrc: "english-original.wav", cases: [] };
+  const before = JSON.stringify({ own, props });
+  const result = hostWorkflowState(props, own, sample);
+  assert.equal(result.previewProps.locale, "en");
+  assert.equal(result.previewProps.narrationAudioSrc, "english-original.wav");
+  assert.equal(result.previewProps.beats[0].say, own[0].say);
+  assert.equal(result.previewProps.beats[0].elements[0].layout, "flow");
+  const fallback = hostWorkflowState(props, null, { beats: [{ say: "English preview sample", elements: [] }] });
+  assert.equal(fallback.canRender, false);
+  assert.equal(fallback.previewProps.locale, "en");
+  assert.equal(fallback.previewProps.beats[0].say, "English preview sample");
+  assert.equal(fallback.previewProps.narrationAudioSrc, undefined);
+  assert.equal(JSON.stringify({ own, props }), before);
+});

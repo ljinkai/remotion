@@ -54,7 +54,9 @@ const weight = (text: string) =>
 /** Lossless, semantic pages; normal Latin words remain atomic. */
 export const explanationTextPages = (text: string, budget: number) => {
   const tokens = (
-    text.match(/[A-Za-z0-9]+(?:[-'’./:+_][A-Za-z0-9]+)*|\s+|[^\s]/gu) || []
+    text.match(
+      /[$€£¥]?\d+(?:,\d{3})+(?:\.\d+)?%?|[$€£¥]?[A-Za-z0-9]+(?:[-'’./:+_][A-Za-z0-9]+)*%?|\s+|[^\s]/gu,
+    ) || []
   ).flatMap((token) => (weight(token) > budget ? [...token] : [token]));
   const pages: string[] = [];
   let start = 0;

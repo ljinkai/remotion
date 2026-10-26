@@ -157,3 +157,64 @@ test("multiple disclosed quantities keep their full source labels without combin
   assert.equal(legacySingle.elements.some((element) => element.type === "chart"), false);
   assert.equal(explanation(legacySingle).items.length, 2);
 });
+
+test("English source selects ordered steps, parallel features, real contrasts and a complete spotlight", () => {
+  for (const [say, layout] of [
+    ["First import your notes, then review the draft, and finally export the report.", "flow"],
+    ["Supports email, document search, and local backups.", "features"],
+    ["Includes email or SMS delivery.", "features"],
+    ["Not a generic dashboard, but a focused lead research tool.", "contrast"],
+    ["Native API publishing rather than simple link sharing.", "contrast"],
+    ["Before we copied reports manually. Now we review a local draft.", "contrast"],
+    ["Open source remains a practical way to solve a repeated problem.", "spotlight"],
+  ]) {
+    const visual = buildContentExplanation({ say, locale: "en" });
+    assert.equal(visual.layout, layout, say);
+    sourceBacked(visual, say);
+  }
+  const flow = buildContentExplanation({ say: "First import your notes, then review the draft, and finally export the report.", locale: "en" });
+  assert.equal(flow.items.length, 3);
+  assert.equal(flow.items[2].label, "and finally export the report.");
+  assert.equal(flow.items.some((item) => /^(and|first|then|finally)$/i.test(item.label)), false);
+  const punctuation = buildContentExplanation({ say: "First, import notes; then, review the draft; finally, export the report.", locale: "en" });
+  assert.equal(punctuation.items.length, 3);
+  assert.equal(punctuation.items.some((item) => /^(and|first|then|finally)$/i.test(item.label)), false);
+});
+
+test("English negations, alternatives and financial ranges never become invented workflows", () => {
+  for (const say of [
+    "Does not support email or SMS.", "No paid interface is required.", "Never publish without approval.",
+    "Without an API key, the client cannot publish.", "It can't upload or export files.", "It doesn't include analytics or tracking.",
+    "Savings from $5 to $10 are listed in the report.", "You can use Claude or Codex.",
+  ]) {
+    const visual = buildContentExplanation({ say, locale: "en" });
+    assert.equal(visual.layout, "spotlight", say);
+    assert.equal(visual.items[0].label, say);
+    sourceBacked(visual, say);
+  }
+  const [forged] = enrichBeatScenes([{ say: "Does not support email.", caseIndex: null, elements: [{ type: "explanation", layout: "spotlight", title: "support email", items: [{ label: "support email" }] }] }], { locale: "en" });
+  assert.equal(explanation(forged).items[0].label, "Does not support email.");
+  const range = "Savings from $5 to $10 are listed in the report.";
+  const [endToEnd] = enrichBeatScenes([{ say: range, caseIndex: null, elements: [] }], { locale: "en" });
+  assert.equal(endToEnd.elements.some((element) => element.type === "chart"), false);
+  assert.equal(explanation(endToEnd).layout, "spotlight");
+  assert.equal(explanation(endToEnd).items[0].label, range);
+  assert.deepEqual(enrichBeatScenes([endToEnd], { locale: "en" }), [endToEnd]);
+});
+
+test("English multi-fact metrics preserve users, paying customers, revenue, qualifiers and all playback inputs", () => {
+  const say = "15,000 registered users, 234 paying customers, and $3,700 monthly revenue.";
+  const beats = [{ say, section: "case", caseIndex: 0, scene: "metric", headline: "Reported business metrics", elements: [], startMs: 500, endMs: 6200 }];
+  const props = { locale: "en", cases: [{ image: "original.png" }], narrationAudioSrc: "original.wav" };
+  const before = JSON.stringify({ beats, props });
+  const result = enrichBeatScenes(beats, props);
+  const visual = explanation(result[0]);
+  assert.equal(visual.layout, "features");
+  assert.equal(visual.items.length, 3);
+  for (const token of ["15,000 registered users", "234 paying customers", "$3,700 monthly revenue"]) assert.ok(visual.items.some((item) => item.label.includes(token)));
+  sourceBacked(visual, say);
+  assert.equal(result[0].elements.some((element) => element.type === "chart"), false);
+  assert.deepEqual(enrichBeatScenes(result, props), result);
+  assert.deepEqual([result[0].say, result[0].startMs, result[0].endMs], [say, 500, 6200]);
+  assert.equal(JSON.stringify({ beats, props }), before);
+});

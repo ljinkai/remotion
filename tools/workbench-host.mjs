@@ -27,6 +27,6 @@ export const hostWorkflowState = (props, beats, sampleProps) => {
     isSample: !canRender,
     previewProps: canRender
       ? { ...props, beats: timedBeats, aspect: "portrait" }
-      : { ...sampleProps, aspect: "portrait" },
+      : { ...sampleProps, locale: props?.locale === "en" ? "en" : "zh", aspect: "portrait" },
   };
 };

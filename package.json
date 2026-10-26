@@ -31,7 +31,7 @@
     "build": "remotion bundle",
     "upgrade": "remotion upgrade",
     "lint": "eslint src && tsc",
-    "test": "node --test tools/subtitle-cues.test.mjs tools/cover-images.test.mjs tools/weekly-cover-extract.test.mjs tools/continuous-narration.test.mjs tools/tts-cache.test.mjs tools/beat-spec.test.mjs tools/host-animation.test.mjs tools/host-scene.test.mjs tools/workbench-host.test.mjs tools/host-evidence.test.mjs tools/host-rich-scene.test.mjs tools/host-captions.test.mjs tools/host-content-visuals.test.mjs tools/host-explanation.test.mjs"
+    "test": "node --test tools/subtitle-cues.test.mjs tools/cover-images.test.mjs tools/weekly-cover-extract.test.mjs tools/continuous-narration.test.mjs tools/tts-cache.test.mjs tools/beat-spec.test.mjs tools/host-animation.test.mjs tools/host-scene.test.mjs tools/workbench-host.test.mjs tools/host-evidence.test.mjs tools/host-rich-scene.test.mjs tools/host-captions.test.mjs tools/host-content-visuals.test.mjs tools/host-explanation.test.mjs tools/host-locale.test.mjs"
   },
   "sideEffects": [
     "*.css"

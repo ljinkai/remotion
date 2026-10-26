@@ -1,3 +1,4 @@
+import { useHostLabels } from "./hostLocale";
 import React, { useState } from "react";
 import { Easing, interpolate } from "remotion";
 import { SceneImage, type ImageElement } from "./SceneImage";
@@ -11,6 +12,7 @@ export const SourceImageFocus: React.FC<{
   width?: number;
   height?: number;
 }> = ({ image, frame, fps, width = 952, height = 870 }) => {
+  const labels = useHostLabels();
   const [dimensions, setDimensions] = useState({ width: 1000, height: 1200 });
   const [failed, setFailed] = useState(false);
   const focus = image.focus || { x: 0, y: 0, width: 1, height: 0.48 };
@@ -71,7 +73,7 @@ export const SourceImageFocus: React.FC<{
             textOverflow: "ellipsis",
           }}
         >
-          {image.caption || "原文配图"}
+          {image.caption || labels.source}
         </span>
         <span
           style={{
@@ -81,8 +83,8 @@ export const SourceImageFocus: React.FC<{
           }}
         >
           {amount > 0.05
-            ? `原图局部${focus.label ? ` · ${focus.label}` : ""}`
-            : "原图全貌"}
+            ? `${labels.detail}${focus.label ? ` · ${focus.label}` : ""}`
+            : labels.overview}
         </span>
       </div>
       <div
@@ -108,9 +110,9 @@ export const SourceImageFocus: React.FC<{
             }}
           >
             <strong style={{ fontSize: 40, color: theme.ink }}>
-              {image.caption || "原文配图"}
+              {image.caption || labels.source}
             </strong>
-            <span>图片暂时无法载入</span>
+            <span>{labels.unavailable}</span>
           </div>
         ) : (
           <div
@@ -180,7 +182,7 @@ export const SourceImageFocus: React.FC<{
                 paddingTop: 6,
               }}
             >
-              原图位置
+              {labels.position}
             </div>
           </div>
         ) : null}

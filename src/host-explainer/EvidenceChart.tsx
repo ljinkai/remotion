@@ -1,3 +1,4 @@
+import { useHostLabels } from "./hostLocale";
 import React from "react";
 import { interpolate } from "remotion";
 import type { HostElement } from "./hostTypes";
@@ -22,6 +23,7 @@ export const EvidenceChart: React.FC<{
   fps: number;
   height?: number;
 }> = ({ chart, frame, fps, height = 710 }) => {
+  const labels = useHostLabels();
   const data = chart.data;
   const model = chartPresentation(chart);
   const max = model.maximum;
@@ -29,14 +31,14 @@ export const EvidenceChart: React.FC<{
   const active = Math.min(data.length - 1, Math.floor(amount * data.length));
   const single = model.kind === "single";
   const hasBound = data.some((point) => point.display?.includes("+"));
-  const sourceName = (chart.source || "原文披露")
+  const sourceName = (chart.source || labels.sourceName)
     .split(/[；;]/)[0]
     .split("·")[0]
     .trim();
   const sourceSummary =
     chart.chartType === "milestones"
-      ? `${sourceName} · 横轴为阶段，非日期${hasBound ? " · + 表示下界" : ""}`
-      : chart.source || "数据来自原文";
+      ? `${sourceName} · ${labels.stageAxis}${hasBound ? ` · ${labels.bound}` : ""}`
+      : chart.source || labels.sourceData;
   const label = (point: Chart["data"][number]) =>
     point.display ||
     `${point.value.toLocaleString("en-US")}${chart.unit ? ` ${chart.unit}` : ""}`;
@@ -77,7 +79,7 @@ export const EvidenceChart: React.FC<{
             color: theme.muted,
           }}
         >
-          {chart.source || "原文披露"}
+          {chart.source || labels.sourceName}
         </div>
       </div>
     );
@@ -239,7 +241,7 @@ export const EvidenceChart: React.FC<{
               fontSize={21}
               fill={theme.muted}
             >
-              原文阶段顺序
+              {labels.stageOrder}
             </text>
           </>
         ) : (

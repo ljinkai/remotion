@@ -1,3 +1,4 @@
+import { useHostLabels } from "./hostLocale";
 import React, { useId } from "react";
 import { interpolate } from "remotion";
 import type { HostElement } from "./hostTypes";
@@ -16,6 +17,7 @@ export const RelationshipScene: React.FC<{
   fps: number;
   height?: number;
 }> = ({ relation, frame, localFrame, fps, height = 900 }) => {
+  const labels = useHostLabels();
   const markerId = useId().replace(/:/g, "");
   const nodes = relation.nodes.slice(0, 6);
   const focused =
@@ -49,7 +51,7 @@ export const RelationshipScene: React.FC<{
       >
         <div style={{ fontSize: 36, fontWeight: 800 }}>{relation.title}</div>
         <div style={{ fontSize: 22, color: theme.muted }}>
-          {focused ? "重点展开" : "关系全貌"}
+          {focused ? labels.focus : labels.relationships}
         </div>
       </div>
       <svg
@@ -130,7 +132,7 @@ export const RelationshipScene: React.FC<{
                 fontSize={19}
                 fill={active && focused ? "#fff9" : theme.muted}
               >
-                {relation.mode === "flow" ? "步骤" : "渠道"}{" "}
+                {relation.mode === "flow" ? labels.step : labels.channel}{" "}
                 {String(index + 1).padStart(2, "0")}
               </text>
               <text
@@ -167,7 +169,7 @@ export const RelationshipScene: React.FC<{
               fontSize={23}
               fill="#fff9"
             >
-              增长渠道
+              {labels.growthChannels}
             </text>
           </>
         ) : null}
@@ -180,7 +182,7 @@ export const RelationshipScene: React.FC<{
             fontWeight={800}
             fill="white"
           >
-            {focused ? "聚焦一项" : "渠道选项"}
+            {focused ? labels.focusOne : labels.options}
           </text>
         ) : null}
       </svg>

@@ -28,12 +28,19 @@ const units = (text: string) =>
 export type HostCaptionPage = { lines: string[]; weight: number };
 
 /** Keep every input character; break at punctuation/word boundaries where possible. */
-export const hostCaptionPages = (text: string): HostCaptionPage[] => {
-  const limit =
-    (HOST_CAPTION_LAYOUT.width - HOST_CAPTION_LAYOUT.paddingX * 2) /
-    (HOST_CAPTION_LAYOUT.fontSize * 1.07);
+export const hostCaptionPages = (
+  text: string,
+  layout: {
+    width: number;
+    paddingX: number;
+    fontSize: number;
+  } = HOST_CAPTION_LAYOUT,
+): HostCaptionPage[] => {
+  const limit = (layout.width - layout.paddingX * 2) / (layout.fontSize * 1.07);
   const original =
-    text.match(/[A-Za-z0-9]+(?:[-'’./:+_][A-Za-z0-9]+)*|\s+|[^\s]/gu) || [];
+    text.match(
+      /[$€£¥]?\d+(?:,\d{3})+(?:\.\d+)?%?|[$€£¥]?[A-Za-z0-9]+(?:[-'’./:+_][A-Za-z0-9]+)*%?|\s+|[^\s]/gu,
+    ) || [];
   const tokens = original.flatMap((token) =>
     units(token) > limit ? [...token] : [token],
   );

@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { MyComponent } from "../src/Composition";
 import { HostExplainer } from "../src/host-explainer/HostFromBeats";
-import { hostDurationInFrames, sampleHostProps } from "../src/host-explainer/hostTypes";
+import { hostDurationInFrames, sampleHostProps, enSampleHostProps } from "../src/host-explainer/hostTypes";
 import {
   parseMarkdownToVideo,
   sampleMarkdown,
@@ -212,7 +212,7 @@ function App() {
     [synthesizedProps, scriptedProps, templateId, aspect, hostEvidence],
   );
   const hostWorkflow = useMemo(
-    () => hostWorkflowState(props, beats, sampleHostProps),
+    () => hostWorkflowState(props, beats, props.locale === "en" ? enSampleHostProps : sampleHostProps),
     [props, beats],
   );
   const previewProps = useMemo(

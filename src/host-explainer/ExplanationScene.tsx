@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useContext } from "react";
+import { HostLocaleContext } from "./hostLocale";
 import { interpolate } from "remotion";
 import { theme } from "./theme";
 import {
@@ -12,7 +13,7 @@ const clamp = {
   extrapolateLeft: "clamp" as const,
   extrapolateRight: "clamp" as const,
 };
-const PagedText: React.FC<{
+export const PagedText: React.FC<{
   text: string;
   budget: number;
   frame: number;
@@ -55,6 +56,7 @@ export const ExplanationScene: React.FC<{
   height = 850,
   emphasis = false,
 }) => {
+  const english = useContext(HostLocaleContext) === "en";
   const compact = height < 750;
   const group = explanationItemWindow(
     explanation.items,
@@ -322,12 +324,28 @@ export const ExplanationScene: React.FC<{
                 </div>
                 <PagedText
                   text={item.label}
-                  budget={emphasis && !item.detail ? 14 : large ? 22 : 20}
+                  budget={
+                    english
+                      ? (items.length === 3 && index === 2) ||
+                        items.length === 1
+                        ? 64
+                        : 36
+                      : emphasis && !item.detail
+                        ? 14
+                        : large
+                          ? 22
+                          : 20
+                  }
                   frame={group.frame}
                   duration={group.duration}
                   style={{
-                    fontSize:
-                      emphasis && !item.detail
+                    fontSize: english
+                      ? compact
+                        ? 32
+                        : emphasis
+                          ? 44
+                          : 38
+                      : emphasis && !item.detail
                         ? compact
                           ? 42
                           : 56

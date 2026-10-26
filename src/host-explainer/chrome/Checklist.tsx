@@ -105,6 +105,10 @@ export const Checklist: React.FC<{
               style={{
                 fontSize: 24,
                 fontWeight: 700,
+                maxWidth: "100%",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
                 padding: "10px 16px",
                 borderRadius: 14,
                 background: selected ? theme.ink : theme.line,

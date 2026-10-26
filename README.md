@@ -208,3 +208,9 @@ Images can be files under `public/` such as `case-images/example.png`, or remote
 数字人分镜会从当前讲解选择流程、并列要点、明确对比或重点展示。已有缓存也使用同一增强入口，不需要重新生成逐字稿；原句没有依据的功能、数据和因果不会补进画面。真实图片与已核对图表保留，多项不同单位的指标分别展示，不共用比较坐标。
 
 长解释按语义分页，人物在各分镜固定大小，黄色字幕保持上移。当前实现是规则提取与程序动画，不会自动生成真实产品操作录像。规范见 `openspec/changes/improve-content-adaptive-host-scenes/`，独立技术备份见 `docs/technical/content-adaptive-host-scenes.md`。
+
+## 英文数字人模式
+
+选择 Workbench 的 EN 后，英文内容使用对应的逐字稿与音色入口，并按英文来源提取流程、功能、明确对比和独立指标。人物内置章节、原图状态和图表提示随 locale 切换；原始图片与作者来源文字保持原样。没有真实分镜时的英文样例仅用于预览。
+
+英文长标题和字幕保持完整术语与数字，人物大小和黄色字幕样式与中文一致。实现及验证范围见 `docs/technical/english-host-adaptation.md`；嘴型仍是程序节奏动画，不是音素级口型同步。

@@ -74,6 +74,7 @@ export type HostCaseRef = {
 };
 
 export type HostExplainerProps = {
+  locale?: "zh" | "en";
   beats?: HostBeat[];
   cases?: HostCaseRef[];
   narrationAudioSrc?: string;
@@ -167,6 +168,104 @@ export const sampleHostProps: HostExplainerProps = {
           type: "card",
           title: "从制作记录得到的启发",
           lines: ["专注现有产品", "持续投入", "日复一日地坚持"],
+        },
+      ],
+    },
+  ],
+};
+
+/** English preview fixture only; never replaces generated user beats. */
+export const enSampleHostProps: HostExplainerProps = {
+  locale: "en",
+  cases: [
+    { index: "01", title: "Deck Notes (demo)" },
+    { index: "02", title: "Farrux's build log" },
+  ],
+  beats: [
+    {
+      say: "This demo product reports twelve thousand dollars in monthly revenue.",
+      section: "case",
+      caseIndex: 0,
+      headline: "$12,000 per month",
+      accent: "$12,000",
+      host: "cheer",
+      scene: "metric",
+      startMs: 0,
+      endMs: 4000,
+      elements: [
+        {
+          type: "bar",
+          label: "Monthly revenue",
+          to: 12000,
+          note: "Previous month: $2,400",
+        },
+        { type: "text", text: "$12,000", size: "xl" },
+      ],
+    },
+    {
+      say: "Open the app on your phone to view the product page.",
+      section: "case",
+      caseIndex: 0,
+      headline: "Open the product page",
+      accent: "Open",
+      host: "point",
+      scene: "steps",
+      startMs: 4000,
+      endMs: 8000,
+      elements: [
+        {
+          type: "phone",
+          title: "Deck Notes (demo)",
+          body: "Open the app",
+          action: "View the product page",
+        },
+      ],
+    },
+    {
+      say: "Farrux shared a record of consistently improving an existing product.",
+      section: "case",
+      caseIndex: 1,
+      headline: "Keep improving your product",
+      accent: "improving",
+      host: "point",
+      scene: "product",
+      startMs: 8000,
+      endMs: 12000,
+      elements: [
+        {
+          type: "image",
+          src: "case-images/01-farrux.png",
+          caption: "Farrux — original source",
+        },
+        {
+          type: "card",
+          title: "Build log",
+          lines: [
+            "Focus on the product already built",
+            "Keep working for two to three months",
+          ],
+        },
+      ],
+    },
+    {
+      say: "The hardest part is showing up and doing the work every day.",
+      section: "closing",
+      caseIndex: null,
+      headline: "Keep showing up every day",
+      accent: "every day",
+      host: "point",
+      scene: "statement",
+      startMs: 12000,
+      endMs: 16000,
+      elements: [
+        {
+          type: "card",
+          title: "Lessons from the build log",
+          lines: [
+            "Focus on the existing product",
+            "Keep investing effort",
+            "Show up every day",
+          ],
         },
       ],
     },

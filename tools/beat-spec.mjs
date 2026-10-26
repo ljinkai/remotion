@@ -1,4 +1,4 @@
-import { enrichContentVisuals, sourceMetricItems } from "./host-content-visuals.mjs";
+import { buildContentExplanation, enrichContentVisuals, hasNumericRange, sourceMetricItems } from "./host-content-visuals.mjs";
 
 const ICON_NAMES = new Set([
   "chart",
@@ -78,7 +78,16 @@ const finiteNumber = (value) => {
   return Number.isFinite(number) ? number : null;
 };
 
-const cleanText = (value, max) => String(value || "").trim().slice(0, max);
+const cleanText = (value, max) => {
+  const text = String(value || "").trim();
+  if (!/[A-Za-z]/.test(text) || /[\u3400-\u9fff]/.test(text)) return text.slice(0, max);
+  const limit = Math.max(max * 4, max + 24);
+  if (text.length <= limit) return text;
+  const prefix = text.slice(0, limit);
+  const boundary = prefix.search(/\s+\S*$/);
+  // A single long token is kept intact rather than inventing a chopped word.
+  return boundary > 0 ? prefix.slice(0, boundary).trimEnd() : text.match(/^\S+/)?.[0] || text;
+};
 
 export const sanitizeSvg = (markup) => {
   const source = String(markup || "")
@@ -212,16 +221,21 @@ const textFallback = (line, headline) => ({
 const SCENES = new Set(["product", "metric", "steps", "statement", "relationship"]);
 
 // Consume the full multiplier, unit and accounting period; never turn "$5k MRR" into "$5".
-const sourceMetrics = (text) => Array.from(String(text || "").matchAll(
-  /(?:[$¥￥€]\s*)?\d[\d,]*(?:\.\d+)?\s*(?:万|千|亿|[kmb](?![a-z]))?\+?\s*(?:美元|人民币|元|%|％|个用户|位用户|用户|个月|个人|小时|分钟|人|次|份|家|个|秒|天|月|年)?\s*(?:MRR\b|ARR\b|\/(?:month|year|mo|yr)\b)?/gi,
-)).flatMap(([match]) => {
-  const token = match.trim();
-  if (!/[$¥￥€万千亿%％]|美元|人民币|元|用户|人|次|份|家|个|小时|分钟|秒|天|月|年|MRR|ARR|[kmb](?![a-z])/i.test(token)) return [];
-  const number = Number(token.match(/\d[\d,]*(?:\.\d+)?/)[0].replace(/,/g, ""));
-  const multiplier = token.match(/\d[\d,]*(?:\.\d+)?\s*(万|千|亿|[kmb](?![a-z]))/i)?.[1]?.toLowerCase();
-  const scale = { 亿: 1e8, 万: 1e4, 千: 1e3, k: 1e3, m: 1e6, b: 1e9 }[multiplier] || 1;
-  return [{ token, value: number * scale, rawValue: number }];
-});
+const sourceMetrics = (text) => {
+  const source = String(text || "");
+  return Array.from(source.matchAll(
+    /(?:(?:MRR|ARR|(?:registered|paying|paid|active)\s+users?|users?|customers?|subscribers?|revenue|income)\b\s*(?::|=|of)?\s*)?(?:[$¥￥€]\s*)?\d[\d,]*(?:\.\d+)?\s*(?:万|千|亿|million\b|billion\b|thousand\b|[kmb](?![a-z]))?\+?\s*(?:美元|人民币|元|%|％|个用户|位用户|用户|个月|个人|小时|分钟|人|次|份|家|个|秒|天|月|年|(?:registered|paying|paid|active)\s+(?:users?|customers?)\b|users?\b|customers?\b|subscribers?\b|downloads?\b|visits?\b|clicks?\b|hours?\b|minutes?\b|seconds?\b|days?\b|months?\b|years?\b|(?:US\s+)?dollars?\b|USD\b|CNY\b|EUR\b)?\s*(?:(?:in\s+)?(?:MRR|ARR)\b|(?:monthly|annual|yearly)\s+(?:revenue|income)\b|per\s+(?:month|year|day)\b|\/(?:month|year|mo|yr|day)\b)?/gi,
+  )).flatMap((matchInfo) => {
+    const token = matchInfo[0].trim();
+    if (!/[$¥￥€万千亿%％]|美元|人民币|元|用户|人|次|份|家|个|小时|分钟|秒|天|月|年|MRR|ARR|\b(?:million|billion|thousand|users?|customers?|subscribers?|downloads?|visits?|clicks?|hours?|minutes?|seconds?|days?|months?|years?|dollars?|USD|CNY|EUR)\b|[kmb](?![a-z])/i.test(token)) return [];
+    const clausePrefix = source.slice(0, matchInfo.index).split(/[，。；,;!?\n]/).at(-1) || "";
+    if (/\b(?:not|no|never|without|cannot|can[’']t|doesn[’']t|don[’']t)\b/i.test(clausePrefix) && !/\bbut\b/i.test(clausePrefix)) return [];
+    const number = Number(token.match(/\d[\d,]*(?:\.\d+)?/)[0].replace(/,/g, ""));
+    const multiplier = token.match(/\d[\d,]*(?:\.\d+)?\s*(万|千|亿|million\b|billion\b|thousand\b|[kmb](?![a-z]))/i)?.[1]?.toLowerCase();
+    const scale = { 亿: 1e8, 万: 1e4, 千: 1e3, k: 1e3, m: 1e6, b: 1e9, thousand: 1e3, million: 1e6, billion: 1e9 }[multiplier] || 1;
+    return [{ token, value: number * scale, rawValue: number }];
+  });
+};
 
 const normalizeFocus = (raw) => {
   if (!raw || ![raw.x, raw.y, raw.width, raw.height].every((value) => typeof value === "number" && Number.isFinite(value))) return null;
@@ -232,15 +246,16 @@ const normalizeFocus = (raw) => {
 const metricDimensions = (text) => {
   const value = String(text || "");
   const currencies = [];
-  if (/美元|USD|US\$|\$/i.test(value)) currencies.push("USD");
+  if (/美元|USD|US\$|\$|\bdollars?\b/i.test(value)) currencies.push("USD");
   if (/人民币|CNY|RMB|[¥￥]|(?<![美欧])元/i.test(value)) currencies.push("CNY");
   if (/欧元|EUR|€/i.test(value)) currencies.push("EUR");
-  const dimensions = currencies.length ? currencies : /用户/.test(value) ? ["users"]
-    : /%|％|百分比/.test(value) ? ["percent"] : /人数|人(?!民)/.test(value) ? ["people"]
+  const dimensions = currencies.length ? currencies : /用户|\busers?\b/i.test(value) ? ["users"]
+    : /\bcustomers?\b/i.test(value) ? ["customers"] : /\bsubscribers?\b/i.test(value) ? ["subscribers"]
+    : /%|％|百分比/.test(value) ? ["percent"] : /人数|人(?!民)|\bpeople\b/i.test(value) ? ["people"]
       : /次数|次/.test(value) ? ["count"] : /份/.test(value) ? ["copies"] : [];
   const periods = [];
-  if (/MRR|月收入|月营收|每月|月活|月度|\/(?:月|month\b|mo\b)/i.test(value)) periods.push("month");
-  if (/ARR|年收入|年营收|每年|年活|年度|\/(?:年|year\b|yr\b)/i.test(value)) periods.push("year");
+  if (/MRR|\bmonthly\b|\bper month\b|月收入|月营收|每月|月活|月度|\/(?:月|month\b|mo\b)/i.test(value)) periods.push("month");
+  if (/ARR|\bannual(?:ly)?\b|\byearly\b|\bper year\b|年收入|年营收|每年|年活|年度|\/(?:年|year\b|yr\b)/i.test(value)) periods.push("year");
   if (/每天|日活|日度|\/(?:天|日|day\b)/i.test(value)) periods.push("day");
   return { dimension: [...new Set(dimensions)], period: [...new Set(periods)] };
 };
@@ -249,8 +264,8 @@ const textChart = (raw, evidence) => {
   if (!raw || raw.type !== "chart" || !["single", "comparison", "milestones"].includes(raw.chartType) || !Array.isArray(raw.data) || !raw.data.length || raw.data.length > 8) return null;
   if (raw.chartType === "single" && raw.data.length !== 1) return null;
   // Multiple data points need named source entities/stages, never an invented timeline.
-  if (raw.chartType === "comparison" && !/相比|对比|分别|vs\b|versus/i.test(evidence)) return null;
-  if (raw.chartType === "milestones" && !/阶段|随后|然后|→|\d{4}年/.test(evidence)) return null;
+  if (raw.chartType === "comparison" && !/相比|对比|分别|vs\b|versus|\bcompar(?:e|ed|es|ison)\b/i.test(evidence)) return null;
+  if (raw.chartType === "milestones" && !/阶段|随后|然后|→|\d{4}年|\bstages?\b|\bmilestones?\b|\bthen\b/i.test(evidence)) return null;
   const unit = cleanText(raw.unit, 60);
   if (!unit || !evidence.includes(unit)) return null;
   const chartDimensions = metricDimensions(unit);
@@ -263,7 +278,7 @@ const textChart = (raw, evidence) => {
     const label = cleanText(point.label, 60);
     const display = cleanText(point.display, 80);
     if (!label || !evidence.includes(label) || !display || !evidence.includes(display)) return null;
-    const clause = evidence.split(/[，。；,;\n]/).find((part) => part.includes(label) && part.includes(display));
+    const clause = evidence.split(/[，。；;\n]|(?<!\d),|,(?!\d)/).find((part) => part.includes(label) && part.includes(display));
     if (!clause || !sourceMetrics(display).some((fact) => fact.value === point.value)) return null;
     if (!facts.some((fact) => display.includes(fact.token) && fact.value === point.value)) return null;
     const pointDimensions = metricDimensions(display);
@@ -284,20 +299,21 @@ const textChart = (raw, evidence) => {
   // Unknown or inconsistent denominators cannot share a visual comparison axis.
   if (data.length > 1 && pointPeriods.size > 1) return null;
   if (new Set(data.map((point) => point.label)).size !== data.length) return null;
-  return { type: "chart", chartType: raw.chartType, title: cleanText(raw.title, 80) || unit, unit, data, source: "来源：当前案例原文" };
+  return { type: "chart", chartType: raw.chartType, title: cleanText(raw.title, 80) || unit, unit, data, source: /[\u3400-\u9fff]/.test(evidence) ? "来源：当前案例原文" : "Source: case text" };
 };
 
 const sourceSupportsFlow = (nodes, evidence) => nodes.slice(1).every((to, index) => {
   const from = nodes[index];
   return String(evidence || "").split(/[，。！？；,;\n]/).some((clause) => {
-    if (/不是|并非|不能|不代表|不意味着|不等于|没有/.test(clause)) return false;
+    if (/不是|并非|不能|不代表|不意味着|不等于|没有|\b(?:not|no|never|without|cannot|can[’']t|doesn[’']t)\b/i.test(clause)) return false;
     const start = clause.indexOf(from);
     const end = clause.indexOf(to, start + from.length);
-    return start >= 0 && end > start && /进入|转化为|转化成|转为|带来|导致|产生|→|->|随后|然后|接着|再/.test(clause.slice(start + from.length, end));
+    return start >= 0 && end > start && /进入|转化为|转化成|转为|带来|导致|产生|→|->|随后|然后|接着|再|\b(?:enters?|converts? (?:into|to)|leads? to|produces?|causes?|then|next|followed by)\b/i.test(clause.slice(start + from.length, end));
   });
 });
 
-const enrichEvidenceVisuals = (beat, original, caseItem, profile, caseNarration) => {
+const enrichEvidenceVisuals = (beat, original, caseItem, profile, caseNarration, locale) => {
+  const english = locale === "en" || (!/[\u3400-\u9fff]/.test(beat.say || "") && /[A-Za-z]/.test(beat.say || ""));
   const evidence = `${beat.say || ""}\n${caseItem?.sourceBody || ""}\n${caseItem?.metric || ""}`;
   const image = String(caseItem?.image || "").trim();
   const rawElements = Array.isArray(original.elements) ? original.elements : [];
@@ -313,7 +329,7 @@ const enrichEvidenceVisuals = (beat, original, caseItem, profile, caseNarration)
       const title = cleanText(suppliedRelationship.title, 80);
       const reviewedFlow = profile?.relationship?.mode === "flow" && JSON.stringify(profile.relationship.nodes) === JSON.stringify(nodes);
       const flow = suppliedRelationship.mode === "flow" && (reviewedFlow || sourceSupportsFlow(nodes, `${evidence}\n${caseNarration || ""}`));
-      relationship = { type: "relationship", title: evidence.includes(title) || title === profile?.relationship?.title ? title : nodes.join("与"), nodes, focus: Number.isInteger(suppliedRelationship.focus) && suppliedRelationship.focus >= 0 && suppliedRelationship.focus < nodes.length ? suppliedRelationship.focus : 0, mode: flow ? "flow" : "focus" };
+      relationship = { type: "relationship", title: evidence.includes(title) || title === profile?.relationship?.title ? title : nodes.join(english ? " / " : "与"), nodes, focus: Number.isInteger(suppliedRelationship.focus) && suppliedRelationship.focus >= 0 && suppliedRelationship.focus < nodes.length ? suppliedRelationship.focus : 0, mode: flow ? "flow" : "focus" };
     }
   }
   if (profile?.relationship && /全渠道|渠道|打透|专注|聚焦|只做|一个/.test(beat.say || "") && beat.scene !== "metric") {
@@ -338,15 +354,15 @@ const enrichEvidenceVisuals = (beat, original, caseItem, profile, caseNarration)
   if (chart || relationship) {
     const rich = chart || relationship;
     const retained = elements.filter((element) => element.type === "image");
-    const currentMetric = chart && profile?.chart && /年收入|年营收|ARR/i.test(beat.say || "") ? sourceMetrics(beat.say || "")[0] : null;
+    const currentMetric = chart && profile?.chart && /年收入|年营收|annual revenue|annual income|yearly|ARR/i.test(beat.say || "") ? sourceMetrics(beat.say || "")[0] : null;
     const context = currentMetric ? [{ type: "text", text: currentMetric.token, size: "l" }] : [];
     return { ...beat, scene: chart ? "metric" : "relationship", elements: [rich, ...retained, ...context].slice(0, 4) };
   }
   if (beat.scene === "metric") {
     const actual = sourceMetrics(beat.say || "")[0];
-    if (actual && sourceMetricItems(beat.say).length < 2) {
-      const unit = /MRR/i.test(actual.token) ? "MRR" : /ARR/i.test(actual.token) ? "ARR" : /美元|[$]/.test(actual.token) ? "美元" : actual.token.replace(/(?:[$¥￥€]\s*)?\d[\d,]*(?:\.\d+)?\s*(?:万|千|亿|[kmb](?![a-z]))?/i, "").trim() || "原文指标";
-      const single = { type: "chart", chartType: "single", title: beat.headline || "原文指标", unit, data: [{ label: "原文指标", value: actual.value, display: actual.token }], source: "来源：当前口播原文；单值不表示趋势" };
+    if (actual && sourceMetricItems(beat.say).length < 2 && !hasNumericRange(beat.say)) {
+      const unit = /MRR/i.test(actual.token) ? "MRR" : /ARR/i.test(actual.token) ? "ARR" : /美元|dollars?|USD|[$]/i.test(actual.token) ? (english ? "USD" : "美元") : actual.token.replace(/(?:[$¥￥€]\s*)?\d[\d,]*(?:\.\d+)?\s*(?:万|千|亿|[kmb](?![a-z]))?/i, "").trim() || (english ? "Reported metric" : "原文指标");
+      const single = { type: "chart", chartType: "single", title: beat.headline || (english ? "Reported metric" : "原文指标"), unit, data: [{ label: english ? "Reported metric" : "原文指标", value: actual.value, display: actual.token }], source: english ? "Source: narration; a single value does not show a trend" : "来源：当前口播原文；单值不表示趋势" };
       const retained = [...elements, single];
       while (retained.length > 4) {
         const index = retained.findLastIndex((element) => element.type !== "image" && element.type !== "chart");
@@ -359,6 +375,10 @@ const enrichEvidenceVisuals = (beat, original, caseItem, profile, caseNarration)
 };
 
 const stepPhrases = (say) => {
+  if (/[A-Za-z]/.test(say) && !/[\u3400-\u9fff]/.test(say)) {
+    const visual = buildContentExplanation({ say });
+    return visual?.layout === "flow" ? visual.items.map((item) => item.label) : [];
+  }
   if (!/先|然后|再|最后|第一|第二|步骤|→/.test(say)) return [];
   const parts = String(say).split(/[，。；,;\n]|→/).map((part) => part.trim()).filter(Boolean);
   const actions = parts.filter((part) => /打开|输入|点击|选择|上传|生成|发布|订阅|保存|安装|创建|连接|提交|添加|运行|下载|登录|导入|设置|复制/.test(part));
@@ -446,15 +466,16 @@ export const enrichBeatScenes = (beats, props) => {
       const completeMetric = metrics.some((metric) => compact(headline).includes(compact(metric.token)));
       if (!completeMetric) {
         const token = metrics[0].token;
-        const context = String(beat.say || "").match(/年收入|月收入|年营收|月营收|收入|营收/)?.[0] || "";
+        const context = String(beat.say || "").match(/年收入|月收入|年营收|月营收|收入|营收|annual revenue|monthly revenue|annual income|monthly income/i)?.[0] || "";
         // Keep the complete metric instead of applying the old character cap inside its unit.
-        headline = context && `${context}${token}`.length <= 18 ? `${context}${token}` : token;
+        const combined = `${context}${/[A-Za-z]/.test(context) ? " " : ""}${token}`;
+        headline = context && combined.length <= (/[A-Za-z]/.test(context) ? 72 : 18) ? combined : token;
       }
     }
     const profile = Array.isArray(props?.hostEvidence) ? props.hostEvidence.find((item) => item?.image === image) : null;
-    return enrichEvidenceVisuals({ ...beat, headline, accent: headline?.includes(beat.accent) ? beat.accent : "", scene, elements: prioritized }, beat, caseItem, profile, caseNarrations.get(caseIndex));
+    return enrichEvidenceVisuals({ ...beat, headline, accent: headline?.includes(beat.accent) ? beat.accent : "", scene, elements: prioritized }, beat, caseItem, profile, caseNarrations.get(caseIndex), props?.locale);
   });
-  return enrichContentVisuals(enriched);
+  return enrichContentVisuals(enriched, props);
 };
 
 export const validateBeats = (rawBeats, script, props) => {

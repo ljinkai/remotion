@@ -41,7 +41,8 @@ export const buildBeatPrompt = (script, props) => {
     caseIndex: line.caseIndex,
     say: line.say,
   }));
-  return `把逐字稿每一行变成一条叙事分镜，设计视频中间内容区。保留每行原始说法和顺序，按实际信息选择主视觉与辅助信息，不强制卡片网格。
+  const english = props?.locale === "en";
+  return `${english ? "LANGUAGE: English. All generated headlines, accents, titles, item labels, notes and captions MUST be in English, copied from the English source. Do not translate English narration or emit Chinese display text. Preserve whole words and all source units.\n\n" : ""}把逐字稿每一行变成一条叙事分镜，设计视频中间内容区。保留每行原始说法和顺序，按实际信息选择主视觉与辅助信息，不强制卡片网格。
 
 规则：
 - beats 长度必须等于行数，顺序一致。say 原样复制，禁止合并、拆分或改写行。
@@ -60,7 +61,7 @@ export const buildBeatPrompt = (script, props) => {
 - explanation：{type:"explanation",layout:"flow|features|contrast|spotlight",title:"本句原文短语",items:[{label:"原文连续短语",detail:"可选的原文连续说明"}]}。中间区域优先用这种内容解释版式，避免只有一条小引用。flow仅在原文有明确步骤、输入输出或方向连接时使用；features展示明确并列功能；contrast必须真实给出两侧对照且保留否定词；信息不足用spotlight，不能编造界面、功能、数据或因果。每项label/detail均原文摘取，2到4项，spotlight可1项；文字不裁成半句话。相邻同case句仅用于明确连接的对照，不把案例标题对所有句套同一图。explanation主画面使用scene:"statement"，已有原图可作为第二个元素保留，首句产品原图及真实chart继续优先。
 - 所有文字和数据必须来自本句、当前案例标题或指标。数字不能编造、换算成未经说明的单位或补齐假数据。
 - icon.name 只能 chart、phone、coin、user、arrow、check、wave；只作辅助。svg 不使用 script、外链、foreignObject。
-- headline不超过18字，accent必须是headline子串。host为point或cheer。
+- ${english ? "Headline: at most 12 English words / 72 characters, ending at a whole-word boundary; never apply the Chinese 18-character cap." : "headline不超过18字"}，accent必须是headline子串。host为point或cheer。
 - 输出 JSON：{"beats":[{"say":"","headline":"","accent":"","host":"point","scene":"statement","elements":[]}]}
 - text：{type:"text",text:"原文短语",size:"m|l|xl"}；card：{type:"card",title:"短标题",lines:["原文短语"]}；image：{type:"image",src:"当前案例image",caption:"短标题"}；bar：{type:"bar",label:"原指标单位",to:原数字,note:"原指标"}。
 

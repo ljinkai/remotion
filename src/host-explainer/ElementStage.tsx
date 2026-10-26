@@ -1,3 +1,4 @@
+import { useHostLabels } from "./hostLocale";
 import React from "react";
 import { interpolate, useVideoConfig } from "remotion";
 import type { HostElement, HostSceneType } from "./hostTypes";
@@ -14,7 +15,7 @@ import { theme } from "./theme";
 import { EvidenceChart } from "./EvidenceChart";
 import { SourceImageFocus } from "./SourceImageFocus";
 import { RelationshipScene } from "./RelationshipScene";
-import { ExplanationScene } from "./ExplanationScene";
+import { ExplanationScene, PagedText } from "./ExplanationScene";
 import {
   explanationForElements,
   metricPresentation,
@@ -26,13 +27,7 @@ const clamp = {
 };
 const reveal = (frame: number, start: number, length: number) =>
   interpolate(frame, [start, start + length], [0, 1], clamp);
-const shortStyle: React.CSSProperties = {
-  overflowWrap: "anywhere",
-  display: "-webkit-box",
-  WebkitBoxOrient: "vertical",
-  WebkitLineClamp: 2,
-  overflow: "hidden",
-};
+const shortStyle: React.CSSProperties = { overflowWrap: "break-word" };
 
 const ImageMount: React.FC<{
   images: ImageElement[];
@@ -168,7 +163,8 @@ const ProductScene: React.FC<{
   frame: number;
   fps: number;
   expanded?: boolean;
-}> = ({ elements, images, frame, fps, expanded }) => {
+  durationFrames?: number;
+}> = ({ elements, images, frame, fps, expanded, durationFrames = 120 }) => {
   const phrases = scenePhrases(elements).slice(0, 2);
   if (!images.length) {
     return (
@@ -230,7 +226,12 @@ const ProductScene: React.FC<{
                   color: index === 0 ? theme.ink : theme.muted,
                 }}
               >
-                {phrase}
+                <PagedText
+                  text={phrase}
+                  budget={24}
+                  frame={frame}
+                  duration={durationFrames}
+                />
               </div>
             ))}
           </div>
@@ -248,6 +249,7 @@ const MetricScene: React.FC<{
   narration?: string;
   durationFrames?: number;
 }> = ({ elements, images, frame, fps, narration, durationFrames }) => {
+  const labels = useHostLabels();
   const presentation = metricPresentation(elements);
   const chart =
     presentation.type === "chart" ? presentation.element : undefined;
@@ -266,9 +268,12 @@ const MetricScene: React.FC<{
       <div>
         {annualContext ? (
           <div style={{ fontSize: 23, color: theme.muted, marginBottom: 20 }}>
-            本句：{/ARR/i.test(narration || "") ? "年度 ARR" : "年度收入"}
-            {context?.type === "text" ? ` ${context.text}` : ""} · 下图：月度
-            MRR 阶段
+            {labels.thisLine}
+            {/ARR/i.test(narration || "")
+              ? labels.annualARR
+              : labels.annualRevenue}
+            {context?.type === "text" ? ` ${context.text}` : ""} ·{" "}
+            {labels.monthlyStages}
           </div>
         ) : null}
         <EvidenceChart
@@ -281,7 +286,8 @@ const MetricScene: React.FC<{
         context?.type === "text" &&
         !chart.data.some((point) => point.display === context.text) ? (
           <div style={{ fontSize: 23, color: theme.muted, marginTop: 18 }}>
-            本句披露：{context.text}
+            {labels.disclosed}
+            {context.text}
           </div>
         ) : null}
         {images.length ? (
@@ -398,7 +404,12 @@ const MetricScene: React.FC<{
                 fontWeight: 650,
               }}
             >
-              {fact}
+              <PagedText
+                text={fact}
+                budget={24}
+                frame={frame}
+                duration={durationFrames || 120}
+              />
             </div>
           ))}
         </div>
@@ -438,7 +449,8 @@ const StepsScene: React.FC<{
   images: ImageElement[];
   frame: number;
   fps: number;
-}> = ({ elements, images, frame, fps }) => {
+  durationFrames?: number;
+}> = ({ elements, images, frame, fps, durationFrames = 120 }) => {
   const steps = sceneSteps(elements);
   const phone = elements.find((item) => item.type === "phone");
   const hasImages = images.length > 0;
@@ -522,7 +534,12 @@ const StepsScene: React.FC<{
                     lineHeight: 1.22,
                   }}
                 >
-                  {step}
+                  <PagedText
+                    text={step}
+                    budget={28}
+                    frame={frame}
+                    duration={durationFrames}
+                  />
                 </div>
               </div>
             </React.Fragment>

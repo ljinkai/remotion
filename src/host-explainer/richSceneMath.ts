@@ -51,6 +51,16 @@ export const continuousSceneWindow = (
 };
 
 export const relationshipLabelLines = (label: string) => {
+  if (/^[\x20-\x7e]+$/.test(label)) {
+    const lines: string[] = [];
+    for (const word of label.split(/\s+/)) {
+      const last = lines.length - 1;
+      if (last >= 0 && lines[last].length + word.length < 17)
+        lines[last] += ` ${word}`;
+      else lines.push(word);
+    }
+    return lines;
+  }
   const lines: string[] = [];
   let line = "",
     weight = 0;

@@ -1,3 +1,4 @@
+import { useHostLabels } from "./hostLocale";
 import React, { useState } from "react";
 import { Img } from "remotion";
 import { assetSrc } from "../Composition";
@@ -14,6 +15,7 @@ export const SceneImage: React.FC<{
   onDimensions?: (width: number, height: number) => void;
   onFailure?: () => void;
 }> = ({ image, scale = 1, style, onDimensions, onFailure }) => {
+  const labels = useHostLabels();
   const [failedSource, setFailedSource] = useState<string | null>(null);
   if (failedSource === image.src) {
     return (
@@ -32,9 +34,9 @@ export const SceneImage: React.FC<{
         }}
       >
         <div style={{ fontSize: 48, fontWeight: 700, color: theme.ink }}>
-          {image.caption || "原文配图"}
+          {image.caption || labels.source}
         </div>
-        <div style={{ fontSize: 24 }}>图片暂时无法载入</div>
+        <div style={{ fontSize: 24 }}>{labels.unavailable}</div>
       </div>
     );
   }
@@ -42,7 +44,7 @@ export const SceneImage: React.FC<{
     <Img
       data-scene-image={image.src}
       src={assetSrc(image.src)}
-      alt={image.caption || "原文配图"}
+      alt={image.caption || labels.source}
       maxRetries={1}
       onError={() => {
         setFailedSource(image.src);
