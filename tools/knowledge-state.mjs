@@ -1,3 +1,5 @@
+import { alignKnowledgeSpeech } from "./knowledge-timing.mjs";
+
 export const KNOWLEDGE_STORAGE_KEY = "remotion-knowledge-draft-v1";
 export const knowledgeContentKey = (state) =>
   JSON.stringify({
@@ -67,6 +69,7 @@ export const restoreKnowledge = (value) => {
     revision: 0,
   };
   if (!Array.isArray(state.document?.chapters)) state.document = null;
+  if (state.props) state.props = alignKnowledgeSpeech(state.props);
   if (!knowledgePreviewProps(state))
     Object.assign(state, {
       baseProps: null,

@@ -10,9 +10,46 @@ import { compositionIdForProps, enrichBeatScenes } from "./beat-spec.mjs";
 import { buildNarrationPlan, SCENE_BREAK_MS } from "./continuous-narration.mjs";
 import { writeNarrationCache } from "./tts-cache.mjs";
 import { synthesizeVideoProps } from "./synthesize-props.mjs";
+import { restoreKnowledge, knowledgeContentKey, initialKnowledgeState } from "./knowledge-state.mjs";
 
 const config = () => ({ baseUrl: "https://test.invalid", model: "test", apiKey: "test" });
 const fakeAi = (chapters) => async () => new globalThis.Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ title: "模型不能覆盖用户标题", chapters }) } }] }));
+
+test("speech cues can span multiple knowledge sentences without accumulating a silent video tail", () => {
+  const document = createKnowledgeOutline({ source: "# Example\n## First\n你好。再见。谢谢。\n## Second\n开始。结束。" });
+  const props = buildKnowledgeProps(document);
+  props.useSynthesizedTimeline = true;
+  props.narrationDurationMs = 5000;
+  props.cases[0].durationMs = 3000;
+  props.cases[0].cues = [{ text: "你好 再见 谢谢", startMs: 0, endMs: 3000 }];
+  props.cases[1].durationMs = 2000;
+  props.cases[1].cues = [{ text: "开始 结束", startMs: 0, endMs: 2000 }];
+  const result = retimeKnowledgeProps(props);
+  assert.deepEqual(result.beats.map(({ startMs, endMs }) => [startMs, endMs]), [[0, 1000], [1000, 2000], [2000, 3000], [3000, 4000], [4000, 5000]]);
+  assert.equal(result.estimatedDurationMs, 5000);
+  assert.deepEqual(result.knowledge.chapters.map(({ startMs, endMs }) => [startMs, endMs]), [[0, 3000], [3000, 5000]]);
+  assert.deepEqual(retimeKnowledgeProps(result), result);
+  const state = { ...initialKnowledgeState(), title: document.title, source: document.source, document, props };
+  state.plannedKey = knowledgeContentKey(state);
+  assert.deepEqual(restoreKnowledge(state).props.beats, result.beats);
+});
+
+test("a sentence spanning partial cues keeps pauses and later chapters at their recorded times", () => {
+  const props = buildKnowledgeProps(createKnowledgeOutline({ source: "# Example\n## First\n甲乙丙丁。戊己。\n## Second\n最后。" }));
+  props.useSynthesizedTimeline = true;
+  props.narrationDurationMs = 6000;
+  props.cases[0].durationMs = 4000;
+  props.cases[0].cues = [{ text: "甲乙", startMs: 100, endMs: 1000 }, { text: "丙丁 戊己", startMs: 1500, endMs: 3500 }];
+  props.cases[1].durationMs = 2000;
+  props.cases[1].cues = [{ text: "最后", startMs: 0, endMs: 1700 }];
+  const result = retimeKnowledgeProps(props);
+  assert.deepEqual(result.beats.map(({ startMs, endMs }) => [startMs, endMs]), [[100, 2500], [2500, 3500], [4000, 6000]]);
+  props.cases[0].cues = [];
+  const missing = retimeKnowledgeProps(props);
+  assert.equal(missing.beats[1].endMs, 4000);
+  assert.equal(missing.beats[2].startMs, 4000);
+  assert.equal(missing.beats.at(-1).endMs, 6000);
+});
 
 test("offline outline preserves all six source chapters, paragraphs and medical qualifications without paid calls", async () => {
   const result = await organizeKnowledge(knowledgeSample, { getConfig: () => { throw Error("must not access credentials"); }, fetcher: () => { throw Error("must not call a model"); } });

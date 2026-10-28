@@ -1,5 +1,6 @@
 import { assignBeatTiming, enrichBeatScenes } from "./beat-spec.mjs";
 import { URL } from "node:url";
+import { alignKnowledgeSpeech } from "./knowledge-timing.mjs";
 
 const kinds = new Set(["concept", "case", "mechanism", "application", "limits", "summary"]);
 const string = (value) => typeof value === "string" ? value : "";
@@ -110,8 +111,10 @@ const chapterOverview = (chapter) => {
 
 export const retimeKnowledgeProps = (props) => {
   if (props?.contentMode !== "knowledge" && props?.templateId !== "knowledge") return props;
-  let beats = assignBeatTiming(props.beats || [], props);
-  const fullDuration = Math.max(Number(props.narrationDurationMs) || 0, Number(props.introDurationMs || 0) + (props.cases || []).reduce((sum, item) => sum + (Number(item.durationMs) || 0), 0), ...beats.map((beat) => beat.endMs || 0));
+  props = alignKnowledgeSpeech(props);
+  let beats = props.useSynthesizedTimeline ? props.beats || [] : assignBeatTiming(props.beats || [], props);
+  const sceneDuration = Number(props.introDurationMs || 0) + (props.cases || []).reduce((sum, item) => sum + (Number(item.durationMs) || 0), 0);
+  const fullDuration = props.useSynthesizedTimeline ? Number(props.narrationDurationMs) || sceneDuration : Math.max(sceneDuration, ...beats.map((beat) => beat.endMs || 0));
   if (beats.length && fullDuration > beats.at(-1).endMs) beats[beats.length - 1] = { ...beats.at(-1), endMs: fullDuration };
   let cursor = Number(props.introDurationMs) || 0;
   const chapters = (props.knowledge?.chapters || []).map((chapter, index) => {
