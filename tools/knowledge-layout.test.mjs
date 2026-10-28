@@ -52,7 +52,7 @@ test("English knowledge chrome follows locale and no narration is silently subst
   frame = 45;
   const html = renderToStaticMarkup(React.createElement(KnowledgeExplainer, props));
   assert.match(html, /CURRENT CHAPTER/);
-  assert.match(html, /KNOWLEDGE/);
+  assert.match(html, /独立开发新知/);
   assert.match(html, /First collect notes/);
   assert.doesNotMatch(html, /当前章节|本期案例|下周见/);
 });

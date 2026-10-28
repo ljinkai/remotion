@@ -380,7 +380,7 @@ export const KnowledgeExplainer: React.FC<KnowledgeVideoProps> = ({
             {title}
           </div>
           <div>
-            {en ? "KNOWLEDGE" : "知识讲解"}{" "}
+            {"独立开发新知"}{" "}
             <span style={{ color: theme.accent, fontWeight: 800 }}>
               {" "}
               {chapterIndex + 1}/{chapters.length || 1}
