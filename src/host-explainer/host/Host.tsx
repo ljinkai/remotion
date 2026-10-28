@@ -3,6 +3,7 @@ import { useCurrentFrame, useVideoConfig } from "remotion";
 import type { HostPose } from "../demoScript";
 import { hostCharacter } from "./character.generated";
 import { HostLocaleContext } from "../hostLocale";
+import { femaleHostAnimation } from "./femaleHostAnimation";
 import { FemaleHost } from "./FemaleHost";
 import { hostPresenterForLocale } from "./hostPresenter";
 import {
@@ -22,6 +23,7 @@ export const Host: React.FC<{
   speakTo?: number;
   section?: HostSection;
   compact?: boolean;
+  femaleMotion?: boolean;
 }> = ({
   pose,
   localFrame,
@@ -29,6 +31,7 @@ export const Host: React.FC<{
   speakTo = 137,
   section,
   compact = false,
+  femaleMotion = true,
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -55,7 +58,17 @@ export const Host: React.FC<{
       }}
     >
       {presenter === "asian-female" ? (
-        <FemaleHost mouth={state.mouth} />
+        <FemaleHost
+          mouth={state.mouth}
+          animation={femaleHostAnimation({
+            frame,
+            fps,
+            localFrame,
+            speakFrom,
+            speakTo,
+            enabled: femaleMotion,
+          })}
+        />
       ) : (
         <svg
           data-host-character="svg"

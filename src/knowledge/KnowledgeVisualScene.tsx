@@ -1,3 +1,4 @@
+import { hubBranchGeometry, quadraticBezierPoint } from "./knowledgeMotion";
 import React, { useId } from "react";
 import { interpolate } from "remotion";
 import {
@@ -261,39 +262,36 @@ export const KnowledgeVisualScene: React.FC<{
               [930, 105],
               [150, 345],
               [930, 345],
-            ].map(([x, y], i) => (
-              <g key={i}>
-                {path(
-                  `M664 260 Q${x + 110} 260 ${x + 110} ${y + 56}`,
-                  i * 0.25,
-                )}
-                <Box
-                  frame={frame}
-                  duration={duration}
-                  x={x}
-                  y={y}
-                  label={plan.labels[i]}
-                  active={focused(i)}
-                  index={i}
-                />
-                {focused(i) ? (
-                  <circle
-                    cx={
-                      664 +
-                      (x + 110 - 664) *
-                        Math.min(1, ((frame + i * 24) % 105) / 105)
-                    }
-                    cy={
-                      260 +
-                      (y + 56 - 260) *
-                        Math.min(1, ((frame + i * 24) % 105) / 105)
-                    }
-                    r={6}
-                    fill={accent}
+            ].map(([x, y], i) => {
+              const geometry = hubBranchGeometry(x, y);
+              const point = quadraticBezierPoint(
+                geometry,
+                ((frame + i * 24) % 105) / 105,
+              );
+              return (
+                <g key={i} data-hub-branch={i}>
+                  {path(geometry.path, i * 0.25)}
+                  <Box
+                    frame={frame}
+                    duration={duration}
+                    x={x}
+                    y={y}
+                    label={plan.labels[i]}
+                    active={focused(i)}
+                    index={i}
                   />
-                ) : null}
-              </g>
-            ))}
+                  {focused(i) ? (
+                    <circle
+                      data-hub-packet={i}
+                      cx={point.x}
+                      cy={point.y}
+                      r={6}
+                      fill={accent}
+                    />
+                  ) : null}
+                </g>
+              );
+            })}
             <Person
               x={664}
               y={255}

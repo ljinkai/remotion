@@ -97,7 +97,7 @@ test("source images remain rendered alongside diagrams and authored evidence kee
   const result = await build({
     stdin: {
       contents:
-        "export { KnowledgeExplainer } from './KnowledgeExplainer'; export {KnowledgeVisualScene} from './KnowledgeVisualScene';",
+        "export { KnowledgeExplainer } from './KnowledgeExplainer'; export {KnowledgeVisualScene} from './KnowledgeVisualScene'; export * from './knowledgeMotion';",
       resolveDir: fileURLToPath(new URL("../src/knowledge", import.meta.url)),
     },
     bundle: true,
@@ -233,6 +233,78 @@ test("source images remain rendered alongside diagrams and authored evidence kee
   assert.ok(labelPages.size > 1);
   assert.equal([...labelPages.values()].join(""), longName);
 
+  const hubPlan = knowledgeVisualPlan(
+    "项目看板里AI协作，等待结果，整理资料，作出判断。",
+  );
+  const hub = (frame) =>
+    renderToStaticMarkup(
+      React.createElement(module.exports.KnowledgeVisualScene, {
+        plan: hubPlan,
+        frame,
+        duration: 1000,
+        narration: hubPlan.labels.join(" "),
+        locale: "zh",
+      }),
+    );
+  for (const [index, [x, y]] of [
+    [150, 105],
+    [930, 105],
+    [150, 345],
+    [930, 345],
+  ].entries()) {
+    const geometry = module.exports.hubBranchGeometry(x, y);
+    for (const t of [0, 0.25, 0.5, 0.75, 1]) {
+      const point = module.exports.quadraticBezierPoint(geometry, t);
+      assert.ok(
+        Math.abs(
+          point.x -
+            (664 * (1 - t) ** 2 + (x + 110) * (2 * t * (1 - t) + t * t)),
+        ) < 1e-8,
+      );
+      assert.ok(
+        Math.abs(point.y - (260 * (1 - t * t) + (y + 56) * t * t)) < 1e-8,
+      );
+      const frame = (t * 105 - index * 24 + 105) % 105;
+      const html = hub(frame);
+      const branch = html.slice(html.indexOf(`data-hub-branch="${index}"`));
+      const actualPath = branch.match(
+        /<path d="M([\d.-]+) ([\d.-]+) Q([\d.-]+) ([\d.-]+) ([\d.-]+) ([\d.-]+)"/,
+      );
+      const actualDot = branch.match(
+        new RegExp(
+          `data-hub-packet="${index}" cx="([0-9.-]+)" cy="([0-9.-]+)"`,
+        ),
+      );
+      assert.ok(actualPath && actualDot);
+      const [sx, sy, cx, cy, ex, ey] = actualPath.slice(1).map(Number);
+      const phase = ((frame + index * 24) % 105) / 105;
+      assert.ok(
+        Math.abs(
+          Number(actualDot[1]) -
+            ((1 - phase) ** 2 * sx +
+              2 * (1 - phase) * phase * cx +
+              phase ** 2 * ex),
+        ) < 1e-8,
+      );
+      assert.ok(
+        Math.abs(
+          Number(actualDot[2]) -
+            ((1 - phase) ** 2 * sy +
+              2 * (1 - phase) * phase * cy +
+              phase ** 2 * ey),
+        ) < 1e-8,
+      );
+      assert.equal(html, hub(frame), "Bezier seeking must be deterministic");
+    }
+    assert.deepEqual(
+      module.exports.quadraticBezierPoint(geometry, 0),
+      geometry.start,
+    );
+    assert.deepEqual(
+      module.exports.quadraticBezierPoint(geometry, 1),
+      geometry.end,
+    );
+  }
   for (const text of [
     "项目看板里AI协作，等待结果，整理资料，作出判断。",
     "AI帮助版本开发、用户反馈和内容推广。",

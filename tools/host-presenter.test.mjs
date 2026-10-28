@@ -9,7 +9,7 @@ import { build } from "esbuild";
 const require = createRequire(import.meta.url);
 const result = await build({
   stdin: {
-    contents: `export {Host} from './host/Host'; export * from './host/hostPresenter'; export * from './host/hostAnimation'; export {HostLocaleProvider} from './hostLocale'; export {HostExplainer} from './HostFromBeats'; export {HostExplainerDemo} from './HostExplainer';`,
+    contents: `export {Host} from './host/Host'; export * from './host/hostPresenter'; export * from './host/hostAnimation'; export * from './host/femaleHostAnimation'; export {HostLocaleProvider} from './hostLocale'; export {HostExplainer} from './HostFromBeats'; export {HostExplainerDemo} from './HostExplainer';`,
     resolveDir: fileURLToPath(
       new URL("../src/host-explainer", import.meta.url),
     ),
@@ -54,6 +54,8 @@ const {
   femaleHostSprite,
   femaleHostMouthCell,
   hostAnimationState,
+  femaleHostAnimation,
+  FEMALE_BLINK_STARTS,
 } = module.exports;
 const render = (element) => renderToStaticMarkup(element);
 const host = (locale, localFrame = 0) =>
@@ -149,13 +151,90 @@ test("Chinese demo explicitly selects the female host, independent of its parent
   assert.match(html, /data-host-character="asian-female"/);
 });
 
-test("female presenter stays anchored across timeline frames and seeking", () => {
+test("female body and framing remain anchored while local face animation changes", () => {
   currentFrame = 48;
   const first = host("zh", 48);
-  assert.doesNotMatch(first, /transform:rotate|transform-origin/);
-  currentFrame = 160;
-  assert.equal(host("zh", 48), first);
+  currentFrame = 165;
+  const nodded = host("zh", 48);
+  const body = (html) =>
+    html.match(/<g data-female-part="anchored-body"[^>]*>(.*?)<\/g>/)[0];
+  const frame = (html) =>
+    html.match(/data-host-presenter="true" style="([^"]+)"/)[1];
+  assert.equal(body(first), body(nodded));
+  assert.equal(frame(first), frame(nodded));
+  assert.doesNotMatch(body(nodded), /transform=/);
+  assert.doesNotMatch(frame(nodded), /rotate|translate|scale/);
+  assert.notEqual(first, nodded);
   currentFrame = 48;
   assert.equal(host("zh", 48), first);
+  currentFrame = 0;
+});
+const face = (frame, extra = {}) =>
+  femaleHostAnimation({
+    frame,
+    fps: 30,
+    localFrame: 50,
+    speakFrom: 0,
+    speakTo: 300,
+    ...extra,
+  });
+test("blink has continuous closing, hold and opening with open endpoints", () => {
+  for (const start of FEMALE_BLINK_STARTS) {
+    assert.ok(Math.abs(face(start * 30).blink) < 1e-8);
+    assert.ok(Math.abs(face((start + 0.28) * 30).blink) < 1e-8);
+    assert.ok(
+      face((start + 0.05) * 30).blink > 0 &&
+        face((start + 0.05) * 30).blink < 1,
+    );
+    assert.equal(face((start + 0.11) * 30).blink, 1);
+    assert.ok(
+      face((start + 0.2) * 30).blink > 0 && face((start + 0.2) * 30).blink < 1,
+    );
+  }
+  for (let frame = 0; frame < 930; frame++) {
+    const state = face(frame);
+    assert.ok(state.blink >= 0 && state.blink <= 1);
+    assert.equal(state.bodyX, 0);
+    assert.equal(state.bodyY, 0);
+    assert.equal(state.bodyAngle, 0);
+    assert.equal(state.bodyScale, 1);
+  }
+});
+test("head movement is bounded and smooth, follows absolute time and never restarts a beat", () => {
+  let previous = face(0);
+  for (let frame = 1; frame < 930; frame++) {
+    const state = face(frame);
+    assert.ok(Math.abs(state.headAngle) <= 0.18 + 1e-8);
+    assert.ok(Math.abs(state.headY) <= 0.65 + 1e-8);
+    assert.ok(Math.abs(state.headAngle - previous.headAngle) < 0.04);
+    assert.ok(Math.abs(state.headY - previous.headY) < 0.1);
+    previous = state;
+  }
+  const first = face(165);
+  assert.deepEqual(face(165, { localFrame: 80 }), first);
+  face(0);
+  assert.deepEqual(face(165), first);
+  assert.deepEqual(
+    face(330, { fps: 60, localFrame: 100, speakTo: 600 }),
+    first,
+  );
+  const still = face(165, { enabled: false });
+  assert.equal(still.headAngle, 0);
+  assert.equal(still.headY, 0);
+  assert.equal(still.blink, 0);
+});
+test("pause window stays closed while expression intensity settles smoothly", () => {
+  assert.equal(face(165, { localFrame: 301 }).speaking, false);
+  assert.equal(face(165, { localFrame: 301 }).intensity, 0);
+  assert.ok(
+    face(165, { localFrame: 2 }).intensity <
+      face(165, { localFrame: 6 }).intensity,
+  );
+  currentFrame = 72;
+  const eyesClosed = host("zh", 150);
+  assert.match(eyesClosed, /data-host-mouth="closed"/);
+  assert.match(eyesClosed, /data-female-part="eyelids"/);
+  assert.match(eyesClosed, /linearGradient/);
+  assert.doesNotMatch(eyesClosed, /data-female-part="eyelids"[^>]*fill="#000/);
   currentFrame = 0;
 });
