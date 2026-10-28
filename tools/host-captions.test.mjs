@@ -98,3 +98,78 @@ test("short captions stay unchanged and long unbroken URLs do not lose text", ()
     url,
   );
 });
+
+test("the reported knowledge introduction fits its real landscape area as two complete clauses", () => {
+  const text =
+    "做 Claude 的 Anthropic，收购了一家当时只有一名全职员工的药物研发公司。";
+  const landscape = { width: 1328, paddingX: 0, fontSize: 38 };
+  const pages = hostCaptionPages(text, landscape);
+  assert.equal(pages.length, 1);
+  assert.deepEqual(pages[0].lines, [
+    "做 Claude 的 Anthropic，",
+    "收购了一家当时只有一名全职员工的药物研发公司。",
+  ]);
+  assert.equal(pages.flatMap((page) => page.lines).join(""), text);
+  for (const frame of [0, 150, 299])
+    assert.equal(
+      hostCaptionPageAtFrame(pages, frame, 300).page.lines.join(""),
+      text,
+    );
+});
+
+test("portrait Chinese pages keep words intact and rebalance a tiny last page without dropping characters", () => {
+  for (let length = 1; length < 70; length++) {
+    const text = `我们需要${"检查项目结果".repeat(length)}，并承担专业责任，最后回到这家药物研发公司。`;
+    const pages = hostCaptionPages(text);
+    assert.equal(pages.flatMap((page) => page.lines).join(""), text);
+    assert.ok(pages.every((page) => page.lines.length <= 2));
+    assert.ok(
+      pages.every((page) =>
+        page.lines.every((line) => !/公$/.test(line) && !/^司/.test(line)),
+      ),
+    );
+    const tail = pages
+      .at(-1)
+      .lines.join("")
+      .replace(/[\s，。！？；、,.!?;：:]/g, "");
+    if (pages.length > 1) assert.ok(tail.length > 2, `orphan tail: ${tail}`);
+  }
+});
+
+test("mixed facts and hard URLs retain every character with word-sized line breaks", () => {
+  const text =
+    "这家药物研发公司有15,000名用户，月收入$3,700.50，Claude通过MCP/REST处理25%的材料。";
+  for (const layout of [caption, { width: 1328, paddingX: 0, fontSize: 38 }]) {
+    const pages = hostCaptionPages(text, layout),
+      lines = pages.flatMap((page) => page.lines);
+    assert.equal(lines.join(""), text);
+    for (const token of [
+      "公司",
+      "15,000",
+      "$3,700.50",
+      "Claude",
+      "MCP/REST",
+      "25%",
+    ])
+      assert.ok(
+        lines.some((line) => line.includes(token)),
+        token,
+      );
+  }
+  const url = `https://example.com/${"longword".repeat(40)}`;
+  const lines = hostCaptionPages(url).flatMap((page) => page.lines);
+  assert.ok(lines.length > 2);
+  assert.ok(lines.every((line) => line.length <= 40));
+  assert.equal(lines.join(""), url);
+});
+
+test("older engines have a deterministic lossless fallback without Segmenter", async () => {
+  const { code } = await transform(source, { loader: "ts", format: "cjs" });
+  const module = { exports: {} };
+  new Function("Intl", "module", "exports", code)({}, module, module.exports);
+  const text = "我们要反复检查项目结果并整理研发资料，最后回到这家公司。";
+  const pages = module.exports.hostCaptionPages(text);
+  assert.equal(pages.flatMap((page) => page.lines).join(""), text);
+  assert.deepEqual(module.exports.hostCaptionPages(text), pages);
+  assert.ok(pages.every((page) => page.lines.length <= 2));
+});

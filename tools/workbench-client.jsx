@@ -772,7 +772,7 @@ function App() {
         <div className="brand">
           <div>
             <h1>Markdown 视频工作台</h1>
-            <p className="meta">千问逐字稿 · Azure Speech</p>
+            <p className="meta">千问逐字稿 · Azure Speech · <a href="/knowledge">知识讲解（横屏） →</a></p>
           </div>
           <label>
             <input

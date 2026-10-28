@@ -18,6 +18,19 @@ Open the printed local URL, paste or import a Markdown file, then:
 
 Rendered videos are written to `out/`.
 
+### 知识讲解视频（独立页面）
+
+启动工作台后打开 [知识讲解页面 `/knowledge`](http://localhost:5177/knowledge)（端口以启动输出为准）。此页面用于长段材料，独立于原周刊页面和缓存。
+
+1. 输入来源材料，离线整理章节，再编辑每章多段讲稿。
+2. 可选点击 **AI 润色讲稿（付费服务）**；离线整理和分镜规划不自动调用模型。
+3. 生成分镜并预览；可直接导出静音 MP4，或先合成讲解语音。
+4. 核对来源、事实限定与字幕后导出。
+
+知识视频使用 KnowledgeExplainer 横屏 composition（1920×1080，30fps），保留卡通主持人与黄色字幕，不注入周刊开场、CTA 或每案例字数上限。来源材料与编辑稿分开，改稿会使旧分镜/音轨失效。AI 草稿须人工核对，自动检查不保证全部事实正确。
+
+数据契约、接口、章节概览、语音对齐和验证范围见[知识工作台技术备份](docs/technical/knowledge-video-workspace.md)。
+
 ### 数字人主持人
 
 在 Workbench 的模板区域选择 **数字人主持人**，可以直接播放标注为「效果示例」的预览，检查固定人物的嘴型、眨眼和手腕动作；这一步无需调用外部服务，也不会覆盖已有逐字稿、分镜或语音。

@@ -18,6 +18,9 @@ import {
   resolveVoiceId,
 } from "./azure-voices.mjs";
 import { compositionIdForProps } from "./beat-spec.mjs";
+import { renderKnowledgeHtml } from "./knowledge-page.mjs";
+import { organizeKnowledge } from "./knowledge-script.mjs";
+import { buildKnowledgeProps, retimeKnowledgeProps } from "./knowledge-content.mjs";
 import { planBeats } from "./beat-planner.mjs";
 import {
   loadHostEvidence,
@@ -43,6 +46,7 @@ const port = Number(process.env.PORT || 5177);
 const host = process.env.HOST || "0.0.0.0";
 
 let clientBundle = null;
+let knowledgeBundle = null;
 
 const DEFAULT_RENDER_API_KEY = "vidflow-remotion-shared-key-2026";
 
@@ -608,6 +612,13 @@ const getClientBundle = async () => {
   return clientBundle;
 };
 
+const getKnowledgeBundle = async () => {
+  if (knowledgeBundle && process.env.NODE_ENV === "production") return knowledgeBundle;
+  const result = await esbuild.build({ entryPoints: [path.join(root, "tools/knowledge-client.jsx")], bundle: true, write: false, format: "esm", platform: "browser", jsx: "automatic", define: { "process.env.NODE_ENV": JSON.stringify("development") }, loader: { ".ts": "ts", ".tsx": "tsx" } });
+  knowledgeBundle = result.outputFiles[0].text;
+  return knowledgeBundle;
+};
+
 const localRemotionCommand = () => {
   const binary = path.join(root, "node_modules", ".bin", "remotion");
   return { command: binary, prefix: [] };
@@ -623,21 +634,23 @@ const renderVideo = async (props) => {
     .slice(0, 14);
   const propsPath = path.join(tmpDir, `props-${id}.json`);
   const aspect =
-    props?.templateId === "host"
+    props?.templateId === "knowledge" || props?.contentMode === "knowledge"
+      ? "landscape"
+      : props?.templateId === "host"
       ? "portrait"
       : props?.aspect === "portrait"
         ? "portrait"
         : "landscape";
   const compositionId = compositionIdForProps({ ...props, aspect });
   if (
-    compositionId === "HostExplainer" &&
+    ["HostExplainer", "KnowledgeExplainer"].includes(compositionId) &&
     (!Array.isArray(props?.beats) || props.beats.length === 0)
   ) {
     throw new Error("主持人模板需要先生成分镜");
   }
   const outputName = `markdown-video-${aspect}-${id}.mp4`;
   const outputPath = path.join(outDir, outputName);
-  const renderProps = await embedLocalAudioAsDataUrls(props, root);
+  const renderProps = await embedLocalAudioAsDataUrls({ ...props, aspect }, root);
   await writeFile(propsPath, JSON.stringify(renderProps, null, 2), "utf8");
 
   const { command, prefix } = localRemotionCommand();
@@ -720,6 +733,26 @@ const server = createServer(async (req, res) => {
       send(res, 200, renderWorkbenchHtml(), {
         "content-type": "text/html; charset=utf-8",
       });
+      return;
+    }
+
+    if (req.method === "GET" && pathname === "/knowledge") {
+      send(res, 200, renderKnowledgeHtml(), { "content-type": "text/html; charset=utf-8" });
+      return;
+    }
+    if (req.method === "GET" && pathname === "/knowledge-bundle.js") {
+      send(res, 200, await getKnowledgeBundle(), { "content-type": "text/javascript; charset=utf-8" });
+      return;
+    }
+    if (req.method === "POST" && pathname === "/api/knowledge/outline") {
+      const body = await readJson(req);
+      sendJson(res, 200, await organizeKnowledge(body));
+      return;
+    }
+    if (req.method === "POST" && pathname === "/api/knowledge/plan") {
+      const body = await readJson(req);
+      const props = retimeKnowledgeProps(await withVerifiedHostEvidence(buildKnowledgeProps(body.document), root));
+      sendJson(res, 200, { props });
       return;
     }
 
@@ -899,7 +932,7 @@ const server = createServer(async (req, res) => {
     if (req.method === "POST" && pathname === "/api/render") {
       const body = await readJson(req);
       const result = await renderVideo(
-        await withVerifiedHostEvidence(body.props, root),
+        retimeKnowledgeProps(await withVerifiedHostEvidence(body.props, root)),
       );
       sendJson(res, 200, result);
       return;
@@ -1005,7 +1038,7 @@ const server = createServer(async (req, res) => {
 
     send(res, 404, "Not found");
   } catch (error) {
-    sendJson(res, 500, {
+    sendJson(res, error?.statusCode === 400 ? 400 : 500, {
       error: formatRenderError(error),
     });
   }

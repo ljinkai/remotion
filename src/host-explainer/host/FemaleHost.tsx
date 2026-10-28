@@ -5,14 +5,10 @@ import { femaleHostMouthCell, femaleHostSprite } from "./hostPresenter";
 
 export const FemaleHost: React.FC<{
   mouth: HostMouth;
-  frame: number;
-  fps: number;
-}> = ({ mouth, frame, fps }) => {
+}> = ({ mouth }) => {
   const clipId = useId();
   const cell = femaleHostMouthCell(mouth);
-  // Synthetic speaking animation, not phoneme alignment. Move the whole asset
-  // gently so the generated face is never distorted by a mesh or scale effect.
-  const sway = Math.sin((frame / fps) * Math.PI * 0.65) * 0.65;
+  // Keep the body anchored; only the mouth sprite changes while speaking.
   return (
     <svg
       data-host-character="asian-female"
@@ -26,8 +22,6 @@ export const FemaleHost: React.FC<{
       aria-label="亚洲女性数字人主持人"
       style={{
         overflow: "hidden",
-        transform: `rotate(${sway.toFixed(4)}deg)`,
-        transformOrigin: "50% 100%",
       }}
     >
       <defs>

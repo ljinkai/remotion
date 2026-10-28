@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRequire } from "node:module";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, URL } from "node:url";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { build } from "esbuild";
@@ -149,11 +149,12 @@ test("Chinese demo explicitly selects the female host, independent of its parent
   assert.match(html, /data-host-character="asian-female"/);
 });
 
-test("female motion remains deterministic after frame seeking", () => {
+test("female presenter stays anchored across timeline frames and seeking", () => {
   currentFrame = 48;
   const first = host("zh", 48);
+  assert.doesNotMatch(first, /transform:rotate|transform-origin/);
   currentFrame = 160;
-  host("zh", 160);
+  assert.equal(host("zh", 48), first);
   currentFrame = 48;
   assert.equal(host("zh", 48), first);
   currentFrame = 0;

@@ -55,7 +55,7 @@ export const Host: React.FC<{
       }}
     >
       {presenter === "asian-female" ? (
-        <FemaleHost mouth={state.mouth} frame={frame} fps={fps} />
+        <FemaleHost mouth={state.mouth} />
       ) : (
         <svg
           data-host-character="svg"

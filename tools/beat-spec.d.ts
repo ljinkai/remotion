@@ -1,5 +1,6 @@
 export function sanitizeSvg(markup: string): string;
 export function compositionIdForProps(props: {
+  contentMode?: string;
   templateId?: string;
   aspect?: string;
 }): string;

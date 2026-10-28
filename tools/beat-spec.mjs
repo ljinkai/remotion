@@ -222,9 +222,11 @@ const SCENES = new Set(["product", "metric", "steps", "statement", "relationship
 // Consume the full multiplier, unit and accounting period; never turn "$5k MRR" into "$5".
 const sourceMetrics = (text) => {
   const source = String(text || "");
+  const calendarDates = Array.from(source.matchAll(/\d{4}\s*年\s*\d{1,2}\s*月(?:\s*\d{1,2}\s*日)?|\b\d{4}-\d{1,2}-\d{1,2}\b/g), (match) => [match.index, match.index + match[0].length]);
   return Array.from(source.matchAll(
     /(?:(?:MRR|ARR|(?:registered|paying|paid|active)\s+users?|users?|customers?|subscribers?|revenue|income)\b\s*(?::|=|of)?\s*)?(?:[$¥￥€]\s*)?\d[\d,]*(?:\.\d+)?\s*(?:万|千|亿|million\b|billion\b|thousand\b|[kmb](?![a-z]))?\+?\s*(?:美元|人民币|元|%|％|个用户|位用户|用户|个月|个人|小时|分钟|人|次|份|家|个|秒|天|月|年|(?:registered|paying|paid|active)\s+(?:users?|customers?)\b|users?\b|customers?\b|subscribers?\b|downloads?\b|visits?\b|clicks?\b|hours?\b|minutes?\b|seconds?\b|days?\b|months?\b|years?\b|(?:US\s+)?dollars?\b|USD\b|CNY\b|EUR\b)?\s*(?:(?:in\s+)?(?:MRR|ARR)\b|(?:monthly|annual|yearly)\s+(?:revenue|income)\b|per\s+(?:month|year|day)\b|\/(?:month|year|mo|yr|day)\b)?/gi,
   )).flatMap((matchInfo) => {
+    if (calendarDates.some(([start, end]) => matchInfo.index >= start && matchInfo.index < end)) return [];
     const token = matchInfo[0].trim();
     if (!/[$¥￥€万千亿%％]|美元|人民币|元|用户|人|次|份|家|个|小时|分钟|秒|天|月|年|MRR|ARR|\b(?:million|billion|thousand|users?|customers?|subscribers?|downloads?|visits?|clicks?|hours?|minutes?|seconds?|days?|months?|years?|dollars?|USD|CNY|EUR)\b|[kmb](?![a-z])/i.test(token)) return [];
     const clausePrefix = source.slice(0, matchInfo.index).split(/[，。；,;!?\n]/).at(-1) || "";
@@ -587,6 +589,7 @@ export const finalizeBeats = (payload, script, props) => {
 };
 
 export const compositionIdForProps = (props) => {
+  if (props?.contentMode === "knowledge" || props?.templateId === "knowledge") return "KnowledgeExplainer";
   if (props?.templateId === "host") {
     return "HostExplainer";
   }

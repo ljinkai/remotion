@@ -9,6 +9,7 @@ import {
   buildNarrationSsml,
   planHasSpeech,
 } from "./continuous-narration.mjs";
+import { retimeKnowledgeProps } from "./knowledge-content.mjs";
 import { readNarrationCache, writeNarrationCache } from "./tts-cache.mjs";
 
 const synthId = () =>
@@ -20,6 +21,10 @@ const applyTrack = (enriched, publicPath, timings) => {
   enriched.audioSrc = undefined;
   enriched.introAudioSrc = undefined;
   enriched.closingAudioSrc = undefined;
+  if (enriched.contentMode === "knowledge" || enriched.templateId === "knowledge") {
+    enriched.introDurationMs = Math.max(0, timings[0]?.startMs || 0);
+    enriched.closingDurationMs = 0;
+  }
   if (Array.isArray(enriched.cases)) {
     for (const item of enriched.cases) {
       item.audioSrc = undefined;
@@ -57,7 +62,9 @@ export const synthesizeVideoProps = async (props, { root, voice: voiceOpt } = {}
     voiceOpt || process.env.AZURE_SPEECH_VOICE,
     DEFAULT_AZURE_VOICE,
   );
-  const plan = buildNarrationPlan(props);
+  const rawPlan = buildNarrationPlan(props);
+  const knowledge = props?.contentMode === "knowledge" || props?.templateId === "knowledge";
+  const plan = knowledge ? { ...rawPlan, scenes: rawPlan.scenes.filter((scene) => scene.id.startsWith("case-")) } : rawPlan;
   const enriched = structuredClone(props);
 
   if (!planHasSpeech(plan)) {
@@ -65,7 +72,7 @@ export const synthesizeVideoProps = async (props, { root, voice: voiceOpt } = {}
     enriched.narrationAudioSrc = undefined;
     return {
       synthId: id,
-      props: enriched,
+      props: knowledge ? retimeKnowledgeProps(enriched) : enriched,
       paddingMs: 0,
       cache: { hits: 0, misses: 0, voice },
     };
@@ -79,9 +86,10 @@ export const synthesizeVideoProps = async (props, { root, voice: voiceOpt } = {}
   );
   if (cached) {
     applyTrack(enriched, cached.relativePublicPath, cached.timings);
+    if (knowledge) enriched.narrationDurationMs = cached.durationMs;
     return {
       synthId: id,
-      props: enriched,
+      props: knowledge ? retimeKnowledgeProps(enriched) : enriched,
       paddingMs: 0,
       cache: { hits: 1, misses: 0, voice },
     };
@@ -114,10 +122,11 @@ export const synthesizeVideoProps = async (props, { root, voice: voiceOpt } = {}
     throw new Error("整轨语音写入缓存失败");
   }
   applyTrack(enriched, stored.relativePublicPath, timings);
+  if (knowledge) enriched.narrationDurationMs = result.durationMs;
 
   return {
     synthId: id,
-    props: enriched,
+    props: knowledge ? retimeKnowledgeProps(enriched) : enriched,
     paddingMs: 0,
     cache: { hits: 0, misses: 1, voice },
   };

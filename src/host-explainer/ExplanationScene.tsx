@@ -48,6 +48,7 @@ export const ExplanationScene: React.FC<{
   duration: number;
   height?: number;
   emphasis?: boolean;
+  focusIndex?: number;
 }> = ({
   explanation,
   frame,
@@ -55,6 +56,7 @@ export const ExplanationScene: React.FC<{
   duration,
   height = 850,
   emphasis = false,
+  focusIndex,
 }) => {
   const english = useContext(HostLocaleContext) === "en";
   const compact = height < 750;
@@ -65,7 +67,7 @@ export const ExplanationScene: React.FC<{
     duration,
   );
   const items = group.items;
-  const focus = explanationFocus(group.frame, group.duration, items.length);
+  const focus = focusIndex === undefined ? explanationFocus(group.frame, group.duration, items.length) : focusIndex - group.offset;
   const mainHeight = height - 90;
   const overview = interpolate(
     frame,
