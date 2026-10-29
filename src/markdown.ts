@@ -260,19 +260,34 @@ const resolveCaseAuthor = (
   return { author, date };
 };
 
-const firstImage = (lines: string[]) => {
-  const fromField = fieldValue(lines, ["图片", "image", "img"]);
-  if (fromField) {
-    return fromField;
-  }
+const collectImages = (lines: string[]) => {
+  const seen = new Set<string>();
+  const images: string[] = [];
+  const push = (raw: string) => {
+    const url = strip(String(raw || "")).trim();
+    if (!url || seen.has(url)) {
+      return;
+    }
+    seen.add(url);
+    images.push(url);
+  };
 
   for (const line of lines) {
-    const image = line.match(/!\[[^\]]*]\(([^)]+)\)/);
-    if (image) {
-      return strip(image[1]);
+    const field = line.match(/^(?:图片|image|img)\s*[:：]\s*(.+)$/i);
+    if (field) {
+      for (const part of field[1].split(/\s+/)) {
+        push(part);
+      }
+      continue;
+    }
+    for (const match of line.matchAll(/!\[[^\]]*]\(([^)\s]+)/g)) {
+      push(match[1]);
+    }
+    for (const match of line.matchAll(/<img\b[^>]*\bsrc=["']([^"']+)["']/gi)) {
+      push(match[1]);
     }
   }
-  return "";
+  return images;
 };
 
 const bodyText = (lines: string[]) =>
@@ -422,6 +437,7 @@ export const parseMarkdownToVideo = (
       fieldValue(section.body, ["副标题", "subtitle"]) ||
       firstSentence(text, title);
     const { author, date } = resolveCaseAuthor(section.body);
+    const images = collectImages(section.body);
 
     return {
       index: String(index + 1).padStart(2, "0"),
@@ -430,7 +446,8 @@ export const parseMarkdownToVideo = (
       date,
       metric:
         fieldValue(section.body, ["指标", "metric"]) || metricFallback,
-      image: firstImage(section.body),
+      image: images[0] || "",
+      images,
       fallback,
       subtitle: narration,
       sourceBody: text || undefined,

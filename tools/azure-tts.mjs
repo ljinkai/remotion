@@ -8,6 +8,79 @@ import { DEFAULT_AZURE_VOICE } from "./azure-voices.mjs";
 
 const ticksToMs = (ticks) => Math.round(ticks / 10000);
 
+/** Fail if Azure stops sending audio, and cap the whole request. */
+const SYNTH_IDLE_MS = 120_000;
+const SYNTH_MAX_MS = 12 * 60 * 1000;
+
+const closeSynthesizer = (synthesizer) => {
+  try {
+    synthesizer.close();
+  } catch {
+    // already closed after a timeout
+  }
+};
+
+const speakAndWait = (synthesizer, start, onActivity) =>
+  new Promise((resolve, reject) => {
+    let settled = false;
+    let idleTimer;
+    let maxTimer;
+    const finish = (fn, value) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(idleTimer);
+      clearTimeout(maxTimer);
+      fn(value);
+    };
+    const fail = (error) => {
+      closeSynthesizer(synthesizer);
+      finish(
+        reject,
+        error instanceof Error ? error : new Error(String(error || "Azure TTS failed")),
+      );
+    };
+    const bump = () => {
+      if (settled) {
+        return;
+      }
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => {
+        fail(new Error("Azure 语音合成中断，超过 120 秒没有新的音频数据"));
+      }, SYNTH_IDLE_MS);
+    };
+    maxTimer = setTimeout(() => {
+      fail(new Error("Azure 语音合成超过 12 分钟，已停止等待"));
+    }, SYNTH_MAX_MS);
+    bump();
+    onActivity.current = bump;
+    try {
+      start(
+        (speechResult) => {
+          if (
+            speechResult.reason === sdk.ResultReason.SynthesizingAudioCompleted
+          ) {
+            finish(resolve, speechResult);
+            return;
+          }
+          const details = sdk.SpeechSynthesisCancellationDetails.fromResult(
+            speechResult,
+          );
+          fail(
+            new Error(
+              details.errorDetails ||
+                `Azure TTS failed: ${speechResult.reason}`,
+            ),
+          );
+        },
+        (error) => fail(error),
+      );
+    } catch (error) {
+      fail(error);
+    }
+  });
+
 export const getAzureSpeechConfig = (overrides = {}) => {
   const key = process.env.AZURE_SPEECH_KEY?.trim();
   const region = process.env.AZURE_SPEECH_REGION?.trim();
@@ -48,8 +121,10 @@ export const synthesizeScene = async (text, outputPath, options = {}) => {
 
   const boundaries = [];
   const synthesizer = new sdk.SpeechSynthesizer(speechConfig, null);
+  const activity = { current: () => {} };
 
   const onWordBoundary = (_sender, event) => {
+    activity.current();
     boundaries.push({
       text: event.text,
       audioOffsetMs: ticksToMs(event.audioOffset),
@@ -63,29 +138,11 @@ export const synthesizeScene = async (text, outputPath, options = {}) => {
   synthesizer.synthesisWordBoundary = onWordBoundary;
 
   try {
-    const result = await new Promise((resolve, reject) => {
-      synthesizer.speakTextAsync(
-        speakText,
-        (speechResult) => {
-          if (
-            speechResult.reason === sdk.ResultReason.SynthesizingAudioCompleted
-          ) {
-            resolve(speechResult);
-            return;
-          }
-          const details = sdk.SpeechSynthesisCancellationDetails.fromResult(
-            speechResult,
-          );
-          reject(
-            new Error(
-              details.errorDetails ||
-                `Azure TTS failed: ${speechResult.reason}`,
-            ),
-          );
-        },
-        (error) => reject(error),
-      );
-    });
+    const result = await speakAndWait(
+      synthesizer,
+      (ok, err) => synthesizer.speakTextAsync(speakText, ok, err),
+      activity,
+    );
 
     const audioBuffer = Buffer.from(result.audioData);
     await writeFile(outputPath, audioBuffer);
@@ -107,7 +164,7 @@ export const synthesizeScene = async (text, outputPath, options = {}) => {
       voice,
     };
   } finally {
-    synthesizer.close();
+    closeSynthesizer(synthesizer);
   }
 };
 
@@ -130,8 +187,10 @@ export const synthesizeNarrationTrack = async (ssml, outputPath, options = {}) =
   const boundaries = [];
   const bookmarks = [];
   const synthesizer = new sdk.SpeechSynthesizer(speechConfig, null);
+  const activity = { current: () => {} };
 
   const onWordBoundary = (_sender, event) => {
+    activity.current();
     boundaries.push({
       text: event.text,
       audioOffsetMs: ticksToMs(event.audioOffset),
@@ -144,6 +203,7 @@ export const synthesizeNarrationTrack = async (ssml, outputPath, options = {}) =
   synthesizer.wordBoundary = onWordBoundary;
   synthesizer.synthesisWordBoundary = onWordBoundary;
   synthesizer.bookmarkReached = (_sender, event) => {
+    activity.current();
     bookmarks.push({
       name: String(event.text || "").trim(),
       audioOffsetMs: ticksToMs(event.audioOffset),
@@ -151,29 +211,11 @@ export const synthesizeNarrationTrack = async (ssml, outputPath, options = {}) =
   };
 
   try {
-    const result = await new Promise((resolve, reject) => {
-      synthesizer.speakSsmlAsync(
-        markup,
-        (speechResult) => {
-          if (
-            speechResult.reason === sdk.ResultReason.SynthesizingAudioCompleted
-          ) {
-            resolve(speechResult);
-            return;
-          }
-          const details = sdk.SpeechSynthesisCancellationDetails.fromResult(
-            speechResult,
-          );
-          reject(
-            new Error(
-              details.errorDetails ||
-                `Azure TTS failed: ${speechResult.reason}`,
-            ),
-          );
-        },
-        (error) => reject(error),
-      );
-    });
+    const result = await speakAndWait(
+      synthesizer,
+      (ok, err) => synthesizer.speakSsmlAsync(markup, ok, err),
+      activity,
+    );
 
     const audioBuffer = Buffer.from(result.audioData);
     await writeFile(outputPath, audioBuffer);
@@ -195,6 +237,6 @@ export const synthesizeNarrationTrack = async (ssml, outputPath, options = {}) =
       voice,
     };
   } finally {
-    synthesizer.close();
+    closeSynthesizer(synthesizer);
   }
 };

@@ -61,6 +61,8 @@ locale: zh
 作者：@farrux
 指标：精选
 图片：https://cdn.example.com/one.png
+图片：https://cdn.example.com/one-extra.png
+![](https://cdn.example.com/one-body.png)
 标签：流量
 
 旁白。
@@ -82,5 +84,10 @@ locale: zh
   assert.deepEqual(props.coverImages, [
     "https://cdn.example.com/one.png",
     "https://cdn.example.com/two.png",
+  ]);
+  assert.deepEqual(props.cases[0].images, [
+    "https://cdn.example.com/one.png",
+    "https://cdn.example.com/one-extra.png",
+    "https://cdn.example.com/one-body.png",
   ]);
 });

@@ -202,15 +202,43 @@ function App() {
         : parsedProps,
     [parsedProps, script, weeklyLocale],
   );
-  const props = useMemo(
-    () => ({
-      ...(synthesizedProps ?? scriptedProps),
+  const props = useMemo(() => {
+    const base = synthesizedProps ?? scriptedProps;
+    const cases = Array.isArray(base?.cases)
+      ? base.cases.map((item, index) => {
+          const source = parsedProps.cases[index];
+          const images =
+            Array.isArray(source?.images) && source.images.length
+              ? source.images
+              : String(source?.image || "").trim()
+                ? [source.image]
+                : Array.isArray(item.images) && item.images.length
+                  ? item.images
+                  : String(item.image || "").trim()
+                    ? [item.image]
+                    : [];
+          return {
+            ...item,
+            image: images[0] || item.image || "",
+            images,
+          };
+        })
+      : base?.cases;
+    return {
+      ...base,
+      cases,
       templateId,
       aspect,
       hostEvidence,
-    }),
-    [synthesizedProps, scriptedProps, templateId, aspect, hostEvidence],
-  );
+    };
+  }, [
+    synthesizedProps,
+    scriptedProps,
+    parsedProps,
+    templateId,
+    aspect,
+    hostEvidence,
+  ]);
   const hostWorkflow = useMemo(
     () => hostWorkflowState(props, beats, props.locale === "en" ? enSampleHostProps : sampleHostProps),
     [props, beats],

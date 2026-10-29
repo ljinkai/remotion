@@ -14,6 +14,8 @@ export type WeeklyCase = {
   date: string;
   metric: string;
   image: string;
+  /** Every image in this case. `image` stays the first one. */
+  images?: string[];
   fallback: string;
   subtitle: string;
   /** Full Markdown body for this case — used when generating 逐字稿 */
@@ -326,6 +328,15 @@ export const normalizeVideoProps = (
       date: clean(item.date, ""),
       metric: clean(item.metric, "精选"),
       image: clean(item.image, ""),
+      images: Array.isArray(item.images)
+        ? [
+            ...new Set(
+              [clean(item.image, ""), ...item.images.map((src) => clean(src, ""))]
+                .map((src) => src.trim())
+                .filter(Boolean),
+            ),
+          ]
+        : undefined,
       fallback: clean(item.fallback, item.title || `条目 ${index + 1}`),
       subtitle: clean(item.subtitle, item.title || `第 ${index + 1} 条内容`),
       sourceBody:

@@ -526,14 +526,27 @@ const stripIssueParen = (text: string) =>
 
 type ImageShape = "unknown" | "landscape" | "portrait";
 
+const caseImageSrcs = (item: WeeklyCase) => {
+  const seen = new Set<string>();
+  const srcs: string[] = [];
+  for (const raw of [item.image, ...(item.images || [])]) {
+    const src = String(raw || "").trim();
+    if (!src || seen.has(src)) {
+      continue;
+    }
+    seen.add(src);
+    srcs.push(src);
+  }
+  return srcs;
+};
+
 const CaseImage: React.FC<{
-  item: WeeklyCase;
+  src: string;
   imageScale: number;
   imageY: number;
   onShape: (shape: ImageShape) => void;
   onBroken: () => void;
-}> = ({ item, imageScale, imageY, onShape, onBroken }) => {
-  const src = item.image.trim();
+}> = ({ src, imageScale, imageY, onShape, onBroken }) => {
 
   if (!src) {
     return null;
@@ -580,18 +593,33 @@ const CaseScene: React.FC<{
   item: WeeklyCase;
   portrait?: boolean;
   locale?: "zh" | "en";
-}> = ({ item, portrait = false }) => {
+  durationInFrames: number;
+}> = ({ item, portrait = false, durationInFrames }) => {
   const frame = useCurrentFrame();
-  const { durationInFrames } = useVideoConfig();
   const progress = sceneProgress(frame, durationInFrames);
   const imageScale = interpolate(progress, [0, 1], [1.04, 1.01]);
   const imageY = interpolate(progress, [0, 1], [0, -16]);
   const meta = [item.author, item.date]
     .filter((part) => part && part !== "Unknown")
     .join(" · ");
-  const hasImageSrc = Boolean(item.image.trim());
+  const images = caseImageSrcs(item);
+  const imageIndex =
+    images.length <= 1
+      ? 0
+      : Math.min(
+          images.length - 1,
+          Math.floor((frame / Math.max(durationInFrames, 1)) * images.length),
+        );
+  const src = images[imageIndex] || "";
+  const hasImageSrc = Boolean(src);
   const [imageShape, setImageShape] = useState<ImageShape>("unknown");
   const [imageBroken, setImageBroken] = useState(false);
+  const [shownSrc, setShownSrc] = useState(src);
+  if (shownSrc !== src) {
+    setShownSrc(src);
+    setImageBroken(false);
+    setImageShape("unknown");
+  }
   const showFallbackOnly = !hasImageSrc || imageBroken;
   const stageClass = [
     "imageStage",
@@ -610,7 +638,8 @@ const CaseScene: React.FC<{
         <div className={stageClass}>
           {!showFallbackOnly ? (
             <CaseImage
-              item={item}
+              key={src}
+              src={src}
               imageScale={imageScale}
               imageY={imageY}
               onShape={setImageShape}
@@ -761,6 +790,7 @@ export const MyComponent: React.FC<WeeklyVideoProps> = (props) => {
                 item={item}
                 portrait={portrait}
                 locale={video.locale}
+                durationInFrames={segment.durationFrames}
               />
             </Sequence>
           );
