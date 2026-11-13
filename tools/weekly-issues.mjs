@@ -82,6 +82,22 @@ const resolveLocalDir = async (root, source) => {
   return null;
 };
 
+/** Refresh origin so a newly published issue is visible without a manual fetch. */
+const refreshGitRemote = async (localDir) => {
+  const gitRoot = await gitToplevel(localDir);
+  if (!gitRoot) {
+    return;
+  }
+  try {
+    await execFileAsync("git", ["fetch", "--quiet", "origin"], {
+      cwd: gitRoot,
+      timeout: 15000,
+    });
+  } catch {
+    // Keep the last fetched refs if the network or auth fails.
+  }
+};
+
 const gitToplevel = async (cwd) => {
   try {
     const { stdout } = await execFileAsync(
@@ -522,6 +538,7 @@ export const listRecentWeeklyIssues = async (root, options = {}) => {
   );
   const source = sourceForLocale(locale);
   const localDir = await resolveLocalDir(root, source);
+  await refreshGitRemote(localDir);
   const [localItems, githubItems, gitItems] = await Promise.all([
     listLocalIssues(localDir, source),
     listGithubIssues(source),
@@ -603,6 +620,7 @@ export const loadWeeklyIssueMarkdown = async (root, issueNumber, options = {}) =
   }
   const source = sourceForLocale(locale);
   const localDir = await resolveLocalDir(root, source);
+  await refreshGitRemote(localDir);
   let markdown = await readLocalMarkdown(localDir, source, issue);
   let from = "local";
   if (!markdown) {

@@ -146,6 +146,7 @@ const clearWorkbenchMediaCache = () => {
 function App() {
   const playerRef = useRef(null);
   const previewAudioRef = useRef(null);
+  const markdownFileRef = useRef(null);
   const [markdown, setMarkdown] = useState(savedMarkdown);
   const [templateId, setTemplateId] = useState(savedTemplate);
   const [aspect, setAspect] = useState(savedAspect);
@@ -541,6 +542,17 @@ function App() {
       return;
     }
     updateMarkdown(await file.text());
+    setError("");
+    setStatus(`已导入 ${file.name}`);
+  };
+
+  const openMarkdownFile = () => {
+    const input = markdownFileRef.current;
+    if (!input) {
+      return;
+    }
+    input.value = "";
+    input.click();
   };
 
   const updateScriptField = (patch) => {
@@ -802,17 +814,16 @@ function App() {
             <h1>Markdown 视频工作台</h1>
             <p className="meta">千问逐字稿 · Azure Speech · <a href="/knowledge">知识讲解（横屏） →</a></p>
           </div>
-          <label>
-            <input
-              type="file"
-              accept=".md,.markdown,text/markdown,text/plain"
-              hidden
-              onChange={(event) => loadFile(event.target.files?.[0])}
-            />
-            <button className="secondary" type="button">
-              导入 MD
-            </button>
-          </label>
+          <input
+            ref={markdownFileRef}
+            type="file"
+            accept=".md,.markdown,text/markdown,text/plain"
+            hidden
+            onChange={(event) => loadFile(event.target.files?.[0])}
+          />
+          <button className="secondary" type="button" onClick={openMarkdownFile}>
+            导入 MD
+          </button>
         </div>
 
         <div className="weeklyPicker">
