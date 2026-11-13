@@ -69,6 +69,8 @@ Workflow:
 4. Click **合成语音** — one Azure request for the whole narration; scene cuts and subtitles follow that audio's timestamps
 5. Preview cue timeline / player, then **生成 MP4**
 
+中文 AI 开场会根据本期案例的具体事实、反差或痛点生成 1–2 句引子（提示词要求不超过 80 字），引出后续看点；结尾用 1–2 句收束有事实依据的具体收获，可带出思考或小行动（提示词要求不超过 80 字），保留原有一句话总结的核心意思，再追加固定结束语「觉得这期有启发，点个赞。每周分享独立开发与产品变现案例，关注我，下期见！」。完整 Markdown `旁白:` 中的自定义开场和结尾会保留。
+
 Synthesized audio is one continuous WAV under `public/generated/` (gitignored). The same full script + voice is cached under `.workbench/tts-cache/` and reused on later synthesize (no Azure call). Editing any spoken line, or changing `AZURE_SPEECH_VOICE`, rebuilds the whole track. Without Azure credentials, preview still works on the legacy fixed timeline; MP4 render uses that timeline too. Without Qwen credentials, you can still hand-write `旁白:` in Markdown or skip AI and synthesize short MD-derived lines.
 
 Recommended runtime: Node 20+.

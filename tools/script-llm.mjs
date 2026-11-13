@@ -7,16 +7,19 @@ const cleanNarration = (text) =>
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 
-/** Fixed cover / intro narration (zh). Two lines, used as-is. */
-const FIXED_INTRO_NARRATION = [
-  "分享最新、有价值的独立开发、产品变现相关内容",
-  "关注我，不错过每周参考内容",
-].join("\n");
-
 /** Fixed CTA appended after the thematic closing (zh). */
-const FIXED_CLOSING_NARRATION = "觉得有用就关注一下，我们下周见！";
+const FIXED_CLOSING_NARRATION = "觉得这期有启发，点个赞。每周分享独立开发与产品变现案例，关注我，下期见！";
+const LEGACY_CLOSING_NARRATION = "觉得有用就关注一下，我们下周见！";
+
 const FIXED_CLOSING_NARRATION_EN =
   "If this was useful, follow for more — see you next week.";
+
+// Subtitle formatting may remove punctuation or insert line breaks inside the CTA.
+const closingCtaPattern = new RegExp(
+  [...FIXED_CLOSING_NARRATION.replace(/[^\p{L}\p{N}]/gu, "")]
+    .join("[\\s\\p{P}]*") + "[\\s\\p{P}]*",
+  "u",
+);
 
 const normalizeLocale = (locale) =>
   String(locale || "")
@@ -35,7 +38,9 @@ const PLACEHOLDER_CLOSING =
 
 const stripClosingCta = (text) =>
   String(text || "")
+    .replace(closingCtaPattern, "")
     .replaceAll(FIXED_CLOSING_NARRATION, "")
+    .replaceAll(LEGACY_CLOSING_NARRATION, "")
     .replaceAll(FIXED_CLOSING_NARRATION_EN, "")
     .replace(/我们下周见[！!]?/g, "")
     .replace(/see you next week\.?/gi, "")
@@ -70,14 +75,6 @@ export const scriptClosingInput = (props) => {
   return { missing: false, text };
 };
 
-/** Cover / intro is the fixed copy. Model text is not appended. */
-export const prependFixedIntro = (intro, locale = "zh") => {
-  if (normalizeLocale(locale) === "en") {
-    return String(intro || "").trim();
-  }
-  return FIXED_INTRO_NARRATION;
-};
-
 const appendFixedClosingCta = (closing, locale = "zh") => {
   const base = String(closing || "").trim();
   const cta = fixedCta(locale);
@@ -85,7 +82,9 @@ const appendFixedClosingCta = (closing, locale = "zh") => {
     return cta;
   }
   if (
+    closingCtaPattern.test(base) ||
     base.includes(FIXED_CLOSING_NARRATION) ||
+    base.includes(LEGACY_CLOSING_NARRATION) ||
     base.includes(FIXED_CLOSING_NARRATION_EN) ||
     base.includes("我们下周见") ||
     /see you next week/i.test(base)
@@ -141,15 +140,15 @@ const normalizeScriptPayload = (payload, props, locale = "zh") => {
     throw new Error("逐字稿 JSON 结构无效");
   }
 
-  const introRaw = prependFixedIntro(payload.intro ?? "", locale);
+  const introRaw = cleanNarration(payload.intro ?? "");
   const intro =
-    optimizeNarrationForSubtitles(cleanNarration(introRaw)) || introRaw;
+    optimizeNarrationForSubtitles(introRaw) || introRaw;
   if (!intro) {
     throw new Error("逐字稿缺少 intro");
   }
   const closingBody = String(payload.closing ?? "").trim();
   if (
-    scriptClosingInput(props).missing &&
+    (normalizeLocale(locale) === "zh" || scriptClosingInput(props).missing) &&
     isPlaceholderClosing(closingBody)
   ) {
     throw new Error("结尾需要从本期内容提炼一句话总结");
@@ -215,10 +214,12 @@ const buildUserPromptZh = (props) => {
 - 写完核心就停，不要凑字，也不要把核心讲丢。每个案例 narration 不超过 200 个字。不要写关注或下周见，系统会追加：${FIXED_CLOSING_NARRATION}
 - ${
   closingInput.missing
-    ? "本期没有一句话总结。closing 必须从输入的案例原文里提炼一句特别值得关注的话，对得上某一条案例里的事实，不超过 60 个字。不要写「增长不是做更多动作，而是把一个动作做透」。"
-    : "closing 按输入里的一句话总结改成口播，不超过 60 个字，不要改成别的主题。"
+    ? "本期没有一句话总结。closing 从本期案例提炼一个具体、值得记住的收获，用案例事实支撑；原文有依据时，可自然落到观众可以思考的问题或小行动。不要强行为所有案例找共同规律。"
+    : "closing 保留输入里一句话总结的核心意思，改成自然口播；可结合对应案例事实说明它对观众的启发，不要改成别的主题。"
 }
-- intro 固定为封面导语，不要改写，直接输出空字符串。系统会写成：${FIXED_INTRO_NARRATION.replaceAll("\n", " / ")}
+- closing 用 1–2 个完整句子，不超过 80 字。具体收获和行动建议必须有原文依据，不要夸大收益、另编建议、重复案例清单或写空泛鸡汤，不要写「增长不是做更多动作，而是把一个动作做透」。不必硬凑提问或行动；原文不足时说清具体收获就停。不要写关注或下周见，系统会追加固定结束语。
+- intro 根据本期案例原文写一个吸引人继续观看的开头，用 1–2 个完整句子，不超过 80 字。优先选最有吸引力的具体事实、反差、痛点或收益，引出后面值得听的内容，不要逐条报标题或提前讲完所有结论。
+- 开头的事实、数字和承诺必须有案例原文依据，不夸大、不制造焦虑、不用「震惊」「财富密码」「看完一定」等噱头。不写泛泛的频道介绍、关注提示或「分享最新、有价值的独立开发、产品变现相关内容」。
 
 输出：
 1. 只输出一个 JSON 对象，不要 Markdown，不要解释。
@@ -313,7 +314,7 @@ const callChatCompletions = async (
   const isEn = normalizeLocale(locale) === "en";
   const system = isEn
     ? `You write spoken English narration. Output strict JSON. For each case, extract the valuable point from the source and say it in complete sentences. Do not use an outline like what/how/result/numbers/why. Do not invent. Each case ≤ 120 words, intro ≤ 50, closing ≤ 40.`
-    : `你是中文口播编辑。输出严格 JSON。从每个案例原文里提炼最有价值的内容，用完整句子连贯讲出来。不要套「是什么、怎么做、结果、数字、为什么成立」这类提纲，也不要拆成没有标点的短句。不要编造。每个案例不超过 200 字。intro 留空，封面导语由系统写成固定文案。如果本期没有一句话总结，closing 从案例里提炼一句特别值得关注的话，不超过 60 字，不要用「增长不是做更多动作，而是把一个动作做透」。`;
+    : `你是中文口播编辑。输出严格 JSON。从每个案例原文里提炼最有价值的内容，用完整句子连贯讲出来。不要套「是什么、怎么做、结果、数字、为什么成立」这类提纲，也不要拆成没有标点的短句。不要编造。每个案例不超过 200 字。intro 根据本期案例里有依据的具体事实、反差或痛点写 1–2 句吸引人继续观看的开头，不超过 80 字，不夸大、不写频道介绍或关注提示。closing 用 1–2 句收束本期具体收获，不超过 80 字；有一句话总结时保留其核心意思，没有则从案例事实提炼。可落到有原文依据的思考或小行动，不编建议、不写空泛鸡汤，不写关注或下周见。`;
 
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",

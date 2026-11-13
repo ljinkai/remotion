@@ -97,7 +97,7 @@ export const defaultVideoProps: WeeklyVideoProps = {
   introSubtitle: "这期独立开发变现周刊，主线是单渠道突破法。",
   closingTitle: "一句话总结",
   closingSubtitle:
-    "增长不是做更多动作，而是把一个动作做透。\n觉得有用就关注一下，我们下周见！",
+    "增长不是做更多动作，而是把一个动作做透。\n觉得这期有启发，点个赞。每周分享独立开发与产品变现案例，关注我，下期见！",
   ticker: "Indie Dev  Product  Revenue  Distribution  SaaS  Open Source",
   audioSrc: "narration.wav",
   cases: [

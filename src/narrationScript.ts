@@ -9,11 +9,20 @@ export const FIXED_INTRO_NARRATION = [
 ].join("\n");
 
 /** Fixed CTA appended after the thematic closing summary (zh). */
-export const FIXED_CLOSING_NARRATION = "觉得有用就关注一下，我们下周见！";
+export const FIXED_CLOSING_NARRATION = "觉得这期有启发，点个赞。每周分享独立开发与产品变现案例，关注我，下期见！";
+
+export const LEGACY_CLOSING_NARRATION = "觉得有用就关注一下，我们下周见！";
 
 /** Fixed CTA for English weekly videos. */
 export const FIXED_CLOSING_NARRATION_EN =
   "If this was useful, follow for more — see you next week.";
+
+// Subtitle formatting may remove punctuation or insert line breaks inside the CTA.
+const closingCtaPattern = new RegExp(
+  [...FIXED_CLOSING_NARRATION.replace(/[^\p{L}\p{N}]/gu, "")]
+    .join("[\\s\\p{P}]*") + "[\\s\\p{P}]*",
+  "u",
+);
 
 export type VideoLocale = "zh" | "en";
 
@@ -55,8 +64,10 @@ export const appendFixedClosingCta = (
     return cta;
   }
   if (
+    closingCtaPattern.test(base) ||
     base.includes(cta) ||
     base.includes(zhCta) ||
+    base.includes(LEGACY_CLOSING_NARRATION) ||
     base.includes(enCta) ||
     base.includes("我们下周见") ||
     /see you next week/i.test(base)
@@ -77,7 +88,15 @@ export const splitClosingSummaryAndCta = (
     return { summary: "", cta: defaultCta };
   }
 
-  for (const cta of [FIXED_CLOSING_NARRATION_EN, FIXED_CLOSING_NARRATION]) {
+  const formattedCta = closingCtaPattern.exec(full);
+  if (formattedCta) {
+    return {
+      summary: full.slice(0, formattedCta.index).trim(),
+      cta: formattedCta[0].trim(),
+    };
+  }
+
+  for (const cta of [FIXED_CLOSING_NARRATION_EN, FIXED_CLOSING_NARRATION, LEGACY_CLOSING_NARRATION]) {
     const ctaIndex = full.indexOf(cta);
     if (ctaIndex >= 0) {
       return {
