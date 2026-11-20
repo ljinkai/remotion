@@ -130,15 +130,15 @@ export const fitSubtitleSize = (text: string, portrait = false) => {
     return 38;
   }
   if (len <= 28) {
-    return 34;
+    return 52;
   }
   if (len <= 48) {
-    return 30;
+    return 46;
   }
   if (len <= 72) {
-    return 26;
+    return 42;
   }
-  return 24;
+  return 38;
 };
 
 export const assetSrc = (src: string) => {

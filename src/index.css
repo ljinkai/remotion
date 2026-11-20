@@ -586,7 +586,7 @@ body {
   margin: 0;
   max-width: 1480px;
   color: var(--fg);
-  font-size: 34px;
+  font-size: 52px;
   font-weight: 900;
   line-height: 1.35;
   text-align: center;
@@ -624,7 +624,7 @@ body {
 }
 
 .coverSceneLayout .sceneSubtitleText {
-  font-size: 40px;
+  font-size: 52px;
   font-weight: 950;
   line-height: 1.35;
   color: #ffffff;

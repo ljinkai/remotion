@@ -191,7 +191,7 @@ const parseAuthorMetaLine = (lines: string[]) => {
     const repoMatch =
       cleaned.match(GITHUB_META_LINE) || cleaned.match(GITHUB_PLAIN_LINE);
     if (repoMatch) {
-      return { author: repoMatch[1], date: "" };
+      return { author: `github.com/${repoMatch[1]}`, date: "" };
     }
   }
   return { author: "", date: "" };
@@ -236,7 +236,7 @@ const parseGithubRepoFromUrls = (lines: string[]): string => {
       /github\.com\/([A-Za-z0-9._-]+\/[A-Za-z0-9._-]+)/i,
     );
     if (match?.[1] && !/^(topics|orgs|settings)\//i.test(match[1])) {
-      return match[1];
+      return `github.com/${match[1]}`;
     }
   }
   return "";
@@ -250,12 +250,15 @@ const resolveCaseAuthor = (
   const metaFromLine = parseAuthorMetaLine(lines);
   const fromRepoUrl = parseGithubRepoFromUrls(lines);
   const fromSource = inferSourceLabel(lines);
-  const author =
+  const rawAuthor =
     fromField ||
     metaFromLine.author ||
     fromRepoUrl ||
     fromSource ||
     "";
+  const author = /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(rawAuthor.trim())
+    ? `github.com/${rawAuthor.trim()}`
+    : rawAuthor.replace(/^GitHub\s+/i, "github.com/");
   const date = fromDateField || metaFromLine.date || "";
   return { author, date };
 };
